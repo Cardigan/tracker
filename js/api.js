@@ -1,6 +1,10 @@
 // Kalshi API Client with localStorage caching + mock data fallback
-const BASE_URL = 'https://api.elections.kalshi.com/trade-api/v2';
+const KALSHI_DIRECT_URL = 'https://api.elections.kalshi.com/trade-api/v2';
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// Use the proxy on deployed environments (Kalshi blocks non-localhost CORS)
+const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const USE_PROXY = !isLocalhost;
 
 // Track whether the API is reachable
 let apiAvailable = true;
@@ -45,9 +49,20 @@ function clearStaleCache() {
 }
 
 async function apiFetch(path, params = {}) {
-  const url = new URL(`${BASE_URL}${path}`);
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, v);
+  let url;
+  if (USE_PROXY) {
+    // Route through our Azure Functions proxy to avoid CORS
+    url = new URL('/api/proxy', location.origin);
+    url.searchParams.set('path', path);
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    }
+  } else {
+    // Direct to Kalshi on localhost
+    url = new URL(`${KALSHI_DIRECT_URL}${path}`);
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    }
   }
 
   const resp = await fetch(url.toString());
