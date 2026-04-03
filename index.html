@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Pulse — Narrative Prediction Markets</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <h1 class="logo">🌍 World Pulse</h1>
+      <p class="subtitle">A dashboard of how the world is changing</p>
+    </div>
+    <div class="header-actions">
+      <button id="search-btn" class="btn btn-primary" title="Search markets">🔍 Search</button>
+      <button id="portfolio-btn" class="btn btn-secondary" title="My portfolios">💼 Portfolios</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <section id="categories-grid" class="categories-grid"></section>
+    <section id="category-detail" class="category-detail hidden"></section>
+  </main>
+
+  <!-- Search Modal -->
+  <div id="search-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Search Markets</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="search-input" class="search-input" placeholder="Search Kalshi markets..." autocomplete="off">
+        <div id="search-results" class="search-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Portfolio Sidebar -->
+  <div id="portfolio-sidebar" class="sidebar hidden">
+    <div class="sidebar-header">
+      <h2>💼 Portfolios</h2>
+      <button class="sidebar-close">&times;</button>
+    </div>
+    <div class="sidebar-body">
+      <div class="portfolio-actions">
+        <input type="text" id="new-portfolio-name" class="input" placeholder="New portfolio name...">
+        <button id="create-portfolio-btn" class="btn btn-primary btn-sm">Create</button>
+      </div>
+      <div id="portfolio-list" class="portfolio-list"></div>
+    </div>
+  </div>
+
+  <!-- Add to Portfolio/Category Modal -->
+  <div id="add-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h2 id="add-modal-title">Add Market</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="add-modal-body"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>Data from <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> · Prices update every 15 min</p>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
