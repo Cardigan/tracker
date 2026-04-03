@@ -7,12 +7,14 @@
  */
 export function computeTrend(market, direction) {
   const current = parseFloat(market.last_price_dollars || market.yes_bid_dollars || '0');
-  const previous = parseFloat(market.previous_price_dollars || market.previous_yes_bid_dollars || '0');
+  const prevRaw = market.previous_price_dollars || market.previous_yes_bid_dollars;
+  const previous = prevRaw != null ? parseFloat(prevRaw) : NaN;
 
-  if (isNaN(current) || isNaN(previous)) return { trend: 0, current, previous };
+  // If we can't determine previous price, trend is unknown
+  if (isNaN(current) || isNaN(previous)) return { trend: 0, current, previous: current, hasPrevious: false };
 
   const trend = (current - previous) * direction;
-  return { trend, current, previous };
+  return { trend, current, previous, hasPrevious: true };
 }
 
 /**
@@ -28,9 +30,10 @@ export function filterTrendingMarkets(markets, mappings) {
     if (!market) continue;
     if (market.status && market.status !== 'open') continue;
 
-    const { trend, current, previous } = computeTrend(market, mapping.direction);
+    const { trend, current, previous, hasPrevious } = computeTrend(market, mapping.direction);
 
-    if (trend > 0) {
+    // Only include markets with confirmed positive trend (> small threshold for float precision)
+    if (trend > 0.001) {
       results.push({
         ...market,
         direction: mapping.direction,

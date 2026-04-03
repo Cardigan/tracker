@@ -29,13 +29,20 @@ async function init() {
 async function fetchAllMarkets() {
   isLoading = true;
   const tickers = getAllTickers();
+  const previousMarkets = allMarkets;
 
   try {
     allMarkets = await getMarkets(tickers);
     trendingByCategory = getTrendingByCategory(allMarkets, MARKET_MAPPINGS, CATEGORIES);
   } catch (err) {
     console.error('Failed to fetch markets:', err);
-    showError(`Failed to load market data: ${err.message}`);
+    if (previousMarkets.length > 0) {
+      allMarkets = previousMarkets;
+      trendingByCategory = getTrendingByCategory(allMarkets, MARKET_MAPPINGS, CATEGORIES);
+      showError('Using cached data — unable to refresh from Kalshi API');
+    } else {
+      showError(`Failed to load market data: ${err.message}`);
+    }
   }
 
   isLoading = false;
