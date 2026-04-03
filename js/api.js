@@ -1,6 +1,9 @@
-// Kalshi API Client with localStorage caching
+// Kalshi API Client with localStorage caching + mock data fallback
 const BASE_URL = 'https://api.elections.kalshi.com/trade-api/v2';
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+// Track whether the API is reachable
+let apiAvailable = true;
 
 function cacheKey(key) {
   return `wp_cache_${key}`;
@@ -25,7 +28,6 @@ function setCache(key, data) {
   try {
     localStorage.setItem(cacheKey(key), JSON.stringify({ data, ts: Date.now() }));
   } catch {
-    // localStorage full — clear old cache entries
     clearStaleCache();
   }
 }
@@ -52,6 +54,7 @@ async function apiFetch(path, params = {}) {
   if (!resp.ok) {
     throw new Error(`Kalshi API error: ${resp.status} ${resp.statusText}`);
   }
+  apiAvailable = true;
   return resp.json();
 }
 
@@ -66,11 +69,10 @@ export async function getMarket(ticker) {
   return market;
 }
 
-/** Fetch multiple markets by tickers (batched into single request if possible) */
+/** Fetch multiple markets by tickers — parallel with mock fallback */
 export async function getMarkets(tickers) {
   if (!tickers || tickers.length === 0) return [];
 
-  // Check which ones are cached
   const results = [];
   const uncached = [];
 
@@ -84,9 +86,8 @@ export async function getMarkets(tickers) {
   }
 
   if (uncached.length > 0) {
-    // Fetch individually since Kalshi doesn't support multi-ticker in one request reliably
-    // Use Promise.allSettled for parallel fetching with error tolerance
     const batchSize = 10;
+    let anySuccess = false;
     for (let i = 0; i < uncached.length; i += batchSize) {
       const batch = uncached.slice(i, i + batchSize);
       const fetches = batch.map(async (ticker) => {
@@ -94,9 +95,10 @@ export async function getMarkets(tickers) {
           const data = await apiFetch(`/markets/${encodeURIComponent(ticker)}`);
           const market = data.market || data;
           setCache(`market_${ticker}`, market);
+          anySuccess = true;
           return market;
         } catch (err) {
-          console.warn(`Failed to fetch market ${ticker}:`, err.message);
+          console.warn(`Failed to fetch ${ticker}:`, err.message);
           return null;
         }
       });
@@ -107,35 +109,38 @@ export async function getMarkets(tickers) {
         }
       }
     }
+
+    // If no API data at all, use mock data for uncached tickers
+    if (!anySuccess && results.length === 0) {
+      apiAvailable = false;
+      console.warn('API unreachable — using mock data');
+      for (const ticker of tickers) {
+        if (!results.find(r => r.ticker === ticker)) {
+          results.push(generateMockMarket(ticker));
+        }
+      }
+    }
   }
 
   return results;
 }
 
-/** Search markets by text query */
-export async function searchMarkets(term, limit = 20) {
-  if (!term || term.length < 2) return [];
-
-  const key = `search_${term}_${limit}`;
+/** Fetch recent trades for a market (for sparkline charts) */
+export async function getMarketTrades(ticker, limit = 50) {
+  const key = `trades_${ticker}_${limit}`;
   const cached = getCached(key);
   if (cached) return cached;
 
   try {
-    const data = await apiFetch('/markets', {
-      status: 'open',
-      limit,
-    });
-    // Client-side filter since the search param may not be available on all endpoints
-    const markets = (data.markets || []).filter(m =>
-      m.title?.toLowerCase().includes(term.toLowerCase()) ||
-      m.subtitle?.toLowerCase().includes(term.toLowerCase()) ||
-      m.event_ticker?.toLowerCase().includes(term.toLowerCase())
-    );
-    setCache(key, markets);
-    return markets;
-  } catch (err) {
-    console.error('Search failed:', err);
-    return [];
+    const data = await apiFetch('/markets/trades', { ticker, limit });
+    const trades = (data.trades || []).map(t => ({
+      price: parseFloat(t.yes_price_dollars),
+      time: new Date(t.created_time).getTime(),
+    })).reverse(); // oldest first for charting
+    setCache(key, trades);
+    return trades;
+  } catch {
+    return generateMockTrades(ticker);
   }
 }
 
@@ -148,35 +153,79 @@ export async function searchMarketsAPI(term, limit = 20) {
   if (cached) return cached;
 
   try {
-    // Try with search parameter first
-    const data = await apiFetch('/markets', {
-      search: term,
-      status: 'open',
-      limit,
-    });
+    const data = await apiFetch('/markets', { search: term, limit });
     const markets = data.markets || [];
     setCache(key, markets);
     return markets;
   } catch {
-    // Fallback to client-side filtering
-    return searchMarkets(term, limit);
+    return [];
   }
 }
 
-/** Fetch a page of open markets (for browsing/discovery) */
-export async function listMarkets(cursor = null, limit = 50) {
-  const params = { status: 'open', limit };
-  if (cursor) params.cursor = cursor;
-
-  const data = await apiFetch('/markets', params);
-  return {
-    markets: data.markets || [],
-    cursor: data.cursor || null,
-  };
+/** Check if we're running on mock data */
+export function isUsingMockData() {
+  return !apiAvailable;
 }
 
 /** Clear all cached data */
 export function clearCache() {
   const keys = Object.keys(localStorage).filter(k => k.startsWith('wp_cache_'));
   keys.forEach(k => localStorage.removeItem(k));
+}
+
+// ===== Mock Data Generators =====
+
+function seededRandom(seed) {
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = ((s << 5) - s + seed.charCodeAt(i)) | 0;
+  return function () {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s & 0x7fffffff) / 2147483647;
+  };
+}
+
+function generateMockMarket(ticker) {
+  const rand = seededRandom(ticker);
+  const basePrice = 0.1 + rand() * 0.8;
+  const change = (rand() - 0.4) * 0.08; // slight upward bias
+  const prevPrice = Math.max(0.01, Math.min(0.99, basePrice - change));
+
+  // Generate a human-readable title from ticker
+  const title = ticker
+    .replace(/^KX/, '')
+    .replace(/-\d+.*$/, '')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^\s/, '')
+    .replace(/\s+/g, ' ');
+
+  return {
+    ticker,
+    event_ticker: ticker.replace(/-[^-]*$/, ''),
+    title: `${title} (Mock)`,
+    subtitle: 'Mock data — API unavailable',
+    status: 'active',
+    last_price_dollars: basePrice.toFixed(4),
+    previous_price_dollars: prevPrice.toFixed(4),
+    yes_bid_dollars: (basePrice - 0.01).toFixed(4),
+    yes_ask_dollars: (basePrice + 0.01).toFixed(4),
+    volume_24h_fp: Math.floor(rand() * 10000).toFixed(2),
+    _isMock: true,
+  };
+}
+
+function generateMockTrades(ticker) {
+  const rand = seededRandom(ticker + '_trades');
+  const points = [];
+  let price = 0.2 + rand() * 0.6;
+  const now = Date.now();
+
+  for (let i = 29; i >= 0; i--) {
+    price += (rand() - 0.48) * 0.03; // slight upward drift
+    price = Math.max(0.02, Math.min(0.98, price));
+    points.push({
+      price: parseFloat(price.toFixed(4)),
+      time: now - i * 86400000,
+    });
+  }
+  return points;
 }

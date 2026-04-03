@@ -1,5 +1,5 @@
 // Main application — orchestration and rendering
-import { getMarkets, getMarket } from './api.js';
+import { getMarkets, getMarketTrades, isUsingMockData } from './api.js';
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById } from './categories.js';
 import { getTrendingByCategory, filterTrendingMarkets, formatProb, formatTrend, computeTrend } from './trend.js';
 import { getPortfolios, createPortfolio, deletePortfolio, addMarketToPortfolio, removeMarketFromPortfolio } from './portfolio.js';
@@ -48,6 +48,67 @@ async function fetchAllMarkets() {
   isLoading = false;
 }
 
+// ===== Sparkline Chart Drawing =====
+function drawSparkline(canvas, trades, isPositive) {
+  if (!canvas || !trades || trades.length < 2) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+
+  const prices = trades.map(t => t.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 0.01;
+  const padding = 2;
+
+  const color = isPositive ? '#22c55e' : '#ef4444';
+  const fillColor = isPositive ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+
+  // Draw filled area
+  ctx.beginPath();
+  ctx.moveTo(padding, h - padding);
+  for (let i = 0; i < prices.length; i++) {
+    const x = padding + (i / (prices.length - 1)) * (w - padding * 2);
+    const y = h - padding - ((prices[i] - min) / range) * (h - padding * 2);
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w - padding, h - padding);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  // Draw line
+  ctx.beginPath();
+  for (let i = 0; i < prices.length; i++) {
+    const x = padding + (i / (prices.length - 1)) * (w - padding * 2);
+    const y = h - padding - ((prices[i] - min) / range) * (h - padding * 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+// Load trade data and render a sparkline for a market card
+async function loadSparkline(ticker, isPositive) {
+  const canvas = document.querySelector(`canvas[data-ticker="${ticker}"]`);
+  if (!canvas) return;
+
+  try {
+    const trades = await getMarketTrades(ticker, 50);
+    drawSparkline(canvas, trades, isPositive);
+  } catch {
+    // Leave canvas empty on error
+  }
+}
+
 // ===== Category Grid =====
 function renderLoadingGrid() {
   gridEl.innerHTML = Array(10).fill(0)
@@ -71,7 +132,11 @@ function renderCategoryGrid() {
     return;
   }
 
-  gridEl.innerHTML = CATEGORIES.map(cat => {
+  const mockBanner = isUsingMockData()
+    ? '<div class="error-banner" style="grid-column:1/-1;background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;">⚠ Using simulated data — Kalshi API unavailable</div>'
+    : '';
+
+  gridEl.innerHTML = mockBanner + CATEGORIES.map(cat => {
     const trending = trendingByCategory.get(cat.id) || [];
     const count = trending.length;
     const total = getMappingsForCategory(cat.id).length;
@@ -93,12 +158,8 @@ function renderCategoryGrid() {
     `;
   }).join('');
 
-  // Attach click handlers
   gridEl.querySelectorAll('.category-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const catId = card.dataset.catId;
-      showCategoryDetail(catId);
-    });
+    card.addEventListener('click', () => showCategoryDetail(card.dataset.catId));
   });
 }
 
@@ -129,18 +190,40 @@ function showCategoryDetail(categoryId) {
         : renderEmptyDetail(allMappings.length)
       }
     </div>
-    ${allMappings.length > trending.length ? renderInactiveSection(allMappings, trending) : ''}
+    ${renderInactiveSection(allMappings, trending)}
   `;
 
   document.getElementById('back-btn').addEventListener('click', () => renderCategoryGrid());
 
-  // Attach portfolio add buttons
   detailEl.querySelectorAll('.add-to-pf-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       showQuickAddToPortfolio(btn.dataset.ticker);
     });
   });
+
+  // Load sparkline charts for all visible markets
+  trending.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+
+  // Load inactive sparklines when the details section is opened
+  const detailsEl = detailEl.querySelector('details');
+  if (detailsEl) {
+    detailsEl.addEventListener('toggle', () => {
+      if (detailsEl.open) {
+        const inactiveTickers = allMappings
+          .filter(m => !trending.find(t => t.ticker === m.ticker))
+          .map(m => m.ticker);
+        inactiveTickers.forEach(t => {
+          const market = allMarkets.find(mk => mk.ticker === t);
+          const mapping = allMappings.find(mp => mp.ticker === t);
+          if (market && mapping) {
+            const { trend } = computeTrend(market, mapping.direction);
+            loadSparkline(t, trend > 0);
+          }
+        });
+      }
+    });
+  }
 }
 
 function renderMarketCard(market) {
@@ -149,8 +232,6 @@ function renderMarketCard(market) {
   const trendText = formatTrend(market.trend);
   const isUp = market.trend > 0;
   const trendClass = isUp ? 'trend-up' : 'trend-down';
-
-  // Color the prob bar based on value
   const barColor = probPct > 60 ? 'var(--green)' : probPct > 40 ? 'var(--orange)' : 'var(--red)';
 
   return `
@@ -159,6 +240,9 @@ function renderMarketCard(market) {
         <div class="market-title">${market.title || market.ticker}</div>
         <div class="market-subtitle">${market.ticker} · Vol: ${market.volume_24h_fp || '0'}</div>
       </div>
+      <div class="market-chart">
+        <canvas data-ticker="${market.ticker}" class="sparkline-canvas"></canvas>
+      </div>
       <div class="market-prob">
         <span class="prob-value" style="color:${barColor}">${prob}</span>
         <div class="prob-bar">
@@ -166,7 +250,7 @@ function renderMarketCard(market) {
         </div>
       </div>
       <div class="market-trend ${trendClass}">
-        <span class="trend-arrow">${isUp ? '📈' : '📉'}</span>
+        <span class="trend-arrow">${isUp ? '▲' : '▼'}</span>
         <span class="trend-value">${trendText}</span>
       </div>
       <div class="market-actions">
@@ -201,10 +285,12 @@ function renderInactiveSection(allMappings, trending) {
     return market ? { ...market, mapping } : null;
   }).filter(Boolean);
 
+  if (inactiveMarkets.length === 0) return '';
+
   return `
     <details style="margin-top:1.5rem;">
       <summary style="cursor:pointer;color:var(--text-muted);font-size:0.875rem;margin-bottom:0.75rem;">
-        ${inactive.length} tracked market${inactive.length !== 1 ? 's' : ''} not currently trending
+        ${inactiveMarkets.length} tracked market${inactiveMarkets.length !== 1 ? 's' : ''} not currently trending
       </summary>
       <div class="market-list">
         ${inactiveMarkets.map(m => {
@@ -215,6 +301,9 @@ function renderInactiveSection(allMappings, trending) {
               <div class="market-info">
                 <div class="market-title">${m.title || m.ticker}</div>
                 <div class="market-subtitle">${m.ticker}</div>
+              </div>
+              <div class="market-chart">
+                <canvas data-ticker="${m.ticker}" class="sparkline-canvas sparkline-inactive"></canvas>
               </div>
               <div class="market-prob">
                 <span class="prob-value" style="font-size:1.125rem;color:var(--text-muted)">${prob}</span>
@@ -268,7 +357,6 @@ async function renderPortfolioList() {
     return;
   }
 
-  // Fetch market data for all portfolio tickers
   const allTickers = [...new Set(portfolios.flatMap(p => p.markets))];
   let marketData = [];
   if (allTickers.length > 0) {
@@ -303,7 +391,6 @@ async function renderPortfolioList() {
     `;
   }).join('');
 
-  // Attach delete handlers
   listEl.querySelectorAll('.delete-pf-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       deletePortfolio(btn.dataset.pfId);
@@ -322,7 +409,6 @@ async function renderPortfolioList() {
 function showQuickAddToPortfolio(ticker) {
   const portfolios = getPortfolios();
   if (portfolios.length === 0) {
-    // Open sidebar to create one first
     document.getElementById('portfolio-sidebar').classList.remove('hidden');
     return;
   }

@@ -28,7 +28,8 @@ export function filterTrendingMarkets(markets, mappings) {
   for (const mapping of mappings) {
     const market = markets.find(m => m.ticker === mapping.ticker);
     if (!market) continue;
-    if (market.status && market.status !== 'open') continue;
+    // Kalshi uses 'active' for open markets, accept both
+    if (market.status && market.status !== 'open' && market.status !== 'active') continue;
 
     const { trend, current, previous, hasPrevious } = computeTrend(market, mapping.direction);
 
