@@ -24,14 +24,8 @@ export function initConfig(onChange, onReset) {
   onConfigChanged = onChange;
   onConfigReset = onReset;
 
-  const configBtn = document.getElementById('config-btn');
   const modal = document.getElementById('config-modal');
-  if (!configBtn || !modal) return;
-
-  configBtn.addEventListener('click', () => {
-    renderTab('categories');
-    modal.classList.remove('hidden');
-  });
+  if (!modal) return;
 
   modal.querySelector('.modal-close').addEventListener('click', () => modal.classList.add('hidden'));
   modal.querySelector('.modal-backdrop').addEventListener('click', () => modal.classList.add('hidden'));
