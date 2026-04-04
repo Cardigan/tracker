@@ -14,8 +14,7 @@
     </div>
     <div class="header-actions">
       <button id="search-btn" class="btn btn-primary" title="Search markets">🔍 Search</button>
-      <button id="portfolio-btn" class="btn btn-secondary" title="My portfolios">💼 Portfolios</button>
-      <button id="config-btn" class="btn btn-secondary" title="Configuration">⚙</button>
+      <button id="portfolio-btn" class="btn btn-secondary" title="Manage categories &amp; markets">💼 Manage</button>
     </div>
   </header>
 
@@ -39,22 +38,7 @@
     </div>
   </div>
 
-  <!-- Portfolio Sidebar -->
-  <div id="portfolio-sidebar" class="sidebar hidden">
-    <div class="sidebar-header">
-      <h2>💼 Portfolios</h2>
-      <button class="sidebar-close">&times;</button>
-    </div>
-    <div class="sidebar-body">
-      <div class="portfolio-actions">
-        <input type="text" id="new-portfolio-name" class="input" placeholder="New portfolio name...">
-        <button id="create-portfolio-btn" class="btn btn-primary btn-sm">Create</button>
-      </div>
-      <div id="portfolio-list" class="portfolio-list"></div>
-    </div>
-  </div>
-
-  <!-- Add to Portfolio/Category Modal -->
+  <!-- Add to Category Modal (shared) -->
   <div id="add-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content modal-sm">
@@ -81,6 +65,7 @@
             </div>
             <a class="detail-kalshi-link market-link" href="#" target="_blank" rel="noopener">↗ View on Kalshi</a>
           </div>
+          <div id="detail-category-pills" style="display:none;flex-wrap:wrap;gap:0.375rem;margin-top:0.625rem;"></div>
         </div>
         <button class="modal-close" style="align-self:flex-start;">&times;</button>
       </div>
@@ -101,12 +86,12 @@
     </div>
   </div>
 
-  <!-- Config Modal -->
+  <!-- Config / Manage Modal -->
   <div id="config-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content modal-config">
       <div class="modal-header">
-        <h2>⚙ Configuration</h2>
+        <h2>💼 Manage</h2>
         <button class="modal-close">&times;</button>
       </div>
       <div class="config-tabs">

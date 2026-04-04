@@ -89,16 +89,16 @@ export function getRemovedDefaultsCount() {
 
 // ===== Mutations =====
 
-export function addMarketMapping(ticker, categoryId, direction) {
+export function addMarketMapping(ticker, categoryId, direction, title = '') {
   if (MARKET_MAPPINGS.find(m => m.ticker === ticker && m.categoryId === categoryId)) return;
   // If user had previously hidden this default, un-hide it instead of adding a duplicate
   const key = `${ticker}:${categoryId}`;
   if (removedDefaultMappings.has(key)) {
     removedDefaultMappings.delete(key);
     _saveRemovedDefaults();
-    MARKET_MAPPINGS.push({ ticker, categoryId, direction, _isDefault: true });
+    MARKET_MAPPINGS.push({ ticker, categoryId, direction, title, _isDefault: true });
   } else {
-    MARKET_MAPPINGS.push({ ticker, categoryId, direction });
+    MARKET_MAPPINGS.push({ ticker, categoryId, direction, title });
   }
   _saveCustomMappings();
 }

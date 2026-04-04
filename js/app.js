@@ -1,16 +1,15 @@
 // Main application — orchestration and rendering
 import { getMarkets, getMarketTrades, isUsingMockData, enrichMarketsWithSlugs, buildKalshiUrl, fetchDefaults } from './api.js';
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById, initDefaults, resetToDefaults } from './categories.js';
-import { getTrendingByCategory, filterTrendingMarkets, formatProb, formatTrend, computeTrend } from './trend.js';
-import { getPortfolios, createPortfolio, deletePortfolio, addMarketToPortfolio, removeMarketFromPortfolio } from './portfolio.js';
-import { initSearch } from './search.js';
+import { getTrendingByCategory, formatProb, formatTrend, computeTrend } from './trend.js';
+import { initSearch, showAddToCategoryModal } from './search.js';
 import { initDetail, openDetail } from './detail.js';
-import { initConfig } from './config.js';
+import { initConfig, openConfig } from './config.js';
 
 // ===== State =====
 let allMarkets = [];
 let trendingByCategory = new Map();
-let currentView = 'grid'; // 'grid' | 'detail'
+let currentView = 'grid';
 let currentCategoryId = null;
 let isLoading = true;
 
@@ -20,14 +19,16 @@ const detailEl = document.getElementById('category-detail');
 
 // ===== Init =====
 async function init() {
-  // Load defaults.json before anything renders — user customizations layer on top
   const defaults = await fetchDefaults();
   initDefaults(defaults);
 
   initSearch(handleMarketAdded, () => allMarkets);
   initDetail();
   initConfig(handleMarketAdded, handleConfigReset);
-  initPortfolioSidebar();
+
+  // 💼 Manage button opens config
+  document.getElementById('portfolio-btn')?.addEventListener('click', () => openConfig('categories'));
+
   renderLoadingGrid();
   loadVersion();
   await fetchAllMarkets();
@@ -49,7 +50,7 @@ async function loadVersion() {
     const { version, sha } = await resp.json();
     const el = document.getElementById('version-display');
     if (el) el.textContent = `v${version} · ${sha}`;
-  } catch { /* dev environment — no version.json */ }
+  } catch { /* dev environment */ }
 }
 
 // ===== Data Fetching =====
@@ -94,7 +95,6 @@ function drawSparkline(canvas, trades, isPositive) {
   const max = Math.max(...prices);
   const range = max - min || 0.01;
   const padding = 2;
-
   const color = isPositive ? '#22c55e' : '#ef4444';
   const fillColor = isPositive ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
 
@@ -114,8 +114,7 @@ function drawSparkline(canvas, trades, isPositive) {
   for (let i = 0; i < prices.length; i++) {
     const x = padding + (i / (prices.length - 1)) * (w - padding * 2);
     const y = h - padding - ((prices[i] - min) / range) * (h - padding * 2);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
@@ -126,20 +125,15 @@ function drawSparkline(canvas, trades, isPositive) {
 async function loadSparkline(ticker, isPositive) {
   const canvas = document.querySelector(`canvas[data-ticker="${ticker}"]`);
   if (!canvas) return;
-
   try {
     const trades = await getMarketTrades(ticker, 50);
     drawSparkline(canvas, trades, isPositive);
-  } catch {
-    // Leave canvas empty on error
-  }
+  } catch { /* leave empty */ }
 }
 
 // ===== Category Grid =====
 function renderLoadingGrid() {
-  gridEl.innerHTML = Array(10).fill(0)
-    .map(() => '<div class="skeleton skeleton-card"></div>')
-    .join('');
+  gridEl.innerHTML = Array(10).fill(0).map(() => '<div class="skeleton skeleton-card"></div>').join('');
 }
 
 function renderCategoryGrid() {
@@ -149,12 +143,11 @@ function renderCategoryGrid() {
 
   if (allMarkets.length === 0 && !isLoading) {
     gridEl.innerHTML = `
-      <div class="empty-state" style="grid-column: 1/-1;">
+      <div class="empty-state" style="grid-column:1/-1;">
         <div class="empty-state-emoji">📡</div>
         <p class="empty-state-text">No market data available. The Kalshi API may be unreachable.</p>
         <button class="btn btn-primary" style="margin-top:1rem;" onclick="location.reload()">Retry</button>
-      </div>
-    `;
+      </div>`;
     return;
   }
 
@@ -167,7 +160,6 @@ function renderCategoryGrid() {
     const count = trending.length;
     const total = getMappingsForCategory(cat.id).length;
     const isActive = count > 0;
-
     return `
       <div class="category-card ${isActive ? 'active' : ''}" data-cat-id="${cat.id}">
         <div class="category-pulse ${isActive ? '' : 'inactive'}"></div>
@@ -176,12 +168,10 @@ function renderCategoryGrid() {
         <div class="category-count">
           ${isActive
             ? `<span class="trending">${count} trending</span> of ${total} tracked`
-            : `${total} tracked · no active trends`
-          }
+            : `${total} tracked · no active trends`}
         </div>
         <p style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">${cat.description}</p>
-      </div>
-    `;
+      </div>`;
   }).join('');
 
   gridEl.querySelectorAll('.category-card').forEach(card => {
@@ -211,55 +201,48 @@ function showCategoryDetail(categoryId) {
       </div>
     </div>
     <div class="market-list" id="market-list">
-      ${trending.length > 0
-        ? trending.map(m => renderMarketCard(m)).join('')
-        : renderEmptyDetail(allMappings.length)
-      }
+      ${trending.length > 0 ? trending.map(m => renderMarketCard(m)).join('') : renderEmptyDetail(allMappings.length)}
     </div>
     ${renderInactiveSection(allMappings, trending)}
   `;
 
   document.getElementById('back-btn').addEventListener('click', () => renderCategoryGrid());
-
   attachMarketCardListeners(detailEl);
-
-  // Load sparkline charts for all visible markets
   trending.forEach(m => loadSparkline(m.ticker, m.trend > 0));
 
   const detailsEl = detailEl.querySelector('details');
   if (detailsEl) {
     detailsEl.addEventListener('toggle', () => {
       if (detailsEl.open) {
-        const inactiveTickers = allMappings
+        allMappings
           .filter(m => !trending.find(t => t.ticker === m.ticker))
-          .map(m => m.ticker);
-        inactiveTickers.forEach(t => {
-          const market = allMarkets.find(mk => mk.ticker === t);
-          const mapping = allMappings.find(mp => mp.ticker === t);
-          if (market && mapping) {
-            const { trend } = computeTrend(market, mapping.direction);
-            loadSparkline(t, trend > 0);
-          }
-        });
+          .forEach(m => {
+            const market = allMarkets.find(mk => mk.ticker === m.ticker);
+            if (market) {
+              const { trend } = computeTrend(market, m.direction);
+              loadSparkline(m.ticker, trend > 0);
+            }
+          });
       }
     });
   }
 }
 
-/** Attach click handlers to market cards for detail overlay */
 function attachMarketCardListeners(container) {
-  container.querySelectorAll('.add-to-pf-btn').forEach(btn => {
+  // 💼 button → add to category
+  container.querySelectorAll('.add-to-cat-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      showQuickAddToPortfolio(btn.dataset.ticker);
+      const market = allMarkets.find(m => m.ticker === btn.dataset.ticker);
+      if (market) showAddToCategoryModal(market);
     });
   });
 
+  // Card body click → detail overlay
   container.querySelectorAll('.market-card').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.market-actions')) return;
-      const ticker = card.dataset.ticker;
-      const market = allMarkets.find(m => m.ticker === ticker);
+      const market = allMarkets.find(m => m.ticker === card.dataset.ticker);
       if (market) openDetail(market);
     });
   });
@@ -293,11 +276,10 @@ function renderMarketCard(market) {
         <span class="trend-value">${trendText}</span>
       </div>
       <div class="market-actions">
-        <button class="btn btn-sm add-to-pf-btn" data-ticker="${market.ticker}" title="Add to portfolio">💼</button>
-        <a class="market-link" href="${buildKalshiUrl(market)}" target="_blank" rel="noopener" title="View on Kalshi" onclick="event.stopPropagation()">↗ Kalshi</a>
+        <button class="btn btn-sm add-to-cat-btn" data-ticker="${market.ticker}" title="Add to category">＋</button>
+        <a class="market-link" href="${buildKalshiUrl(market)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Kalshi</a>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderEmptyDetail(totalMapped) {
@@ -307,22 +289,20 @@ function renderEmptyDetail(totalMapped) {
       <p class="empty-state-text">
         ${totalMapped > 0
           ? 'No markets are currently trending toward this narrative. Check back later!'
-          : 'No markets mapped to this category yet. Use Search to add some.'
-        }
+          : 'No markets mapped to this category yet. Use Search to add some.'}
       </p>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderInactiveSection(allMappings, trending) {
   const trendingTickers = new Set(trending.map(m => m.ticker));
-  const inactive = allMappings.filter(m => !trendingTickers.has(m.ticker));
-  if (inactive.length === 0) return '';
-
-  const inactiveMarkets = inactive.map(mapping => {
-    const market = allMarkets.find(m => m.ticker === mapping.ticker);
-    return market ? { ...market, mapping } : null;
-  }).filter(Boolean);
+  const inactiveMarkets = allMappings
+    .filter(m => !trendingTickers.has(m.ticker))
+    .map(mapping => {
+      const market = allMarkets.find(m => m.ticker === mapping.ticker);
+      return market ? { ...market, mapping } : null;
+    })
+    .filter(Boolean);
 
   if (inactiveMarkets.length === 0) return '';
 
@@ -347,160 +327,31 @@ function renderInactiveSection(allMappings, trending) {
               <div class="market-prob">
                 <span class="prob-value" style="font-size:1.125rem;color:var(--text-muted)">${prob}</span>
               </div>
-              <div class="market-trend" style="color:var(--text-muted)">
-                <span>—</span>
-              </div>
+              <div class="market-trend" style="color:var(--text-muted)"><span>—</span></div>
               <div class="market-actions">
                 <a class="market-link" href="${buildKalshiUrl(m)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Kalshi</a>
               </div>
-            </div>
-          `;
+            </div>`;
         }).join('')}
       </div>
-    </details>
-  `;
-}
-
-// ===== Portfolio Sidebar =====
-function initPortfolioSidebar() {
-  const sidebar = document.getElementById('portfolio-sidebar');
-  const portfolioBtn = document.getElementById('portfolio-btn');
-  const closeBtn = sidebar.querySelector('.sidebar-close');
-  const createBtn = document.getElementById('create-portfolio-btn');
-  const nameInput = document.getElementById('new-portfolio-name');
-
-  portfolioBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('hidden');
-    renderPortfolioList();
-  });
-
-  closeBtn.addEventListener('click', () => sidebar.classList.add('hidden'));
-
-  createBtn.addEventListener('click', () => {
-    const name = nameInput.value.trim();
-    if (name) {
-      createPortfolio(name);
-      nameInput.value = '';
-      renderPortfolioList();
-    }
-  });
-
-  nameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') createBtn.click();
-  });
-}
-
-async function renderPortfolioList() {
-  const listEl = document.getElementById('portfolio-list');
-  const portfolios = getPortfolios();
-
-  if (portfolios.length === 0) {
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-state-emoji">💼</div><p class="empty-state-text">No portfolios yet</p></div>';
-    return;
-  }
-
-  const allTickers = [...new Set(portfolios.flatMap(p => p.markets))];
-  let marketData = [];
-  if (allTickers.length > 0) {
-    try {
-      marketData = await getMarkets(allTickers);
-    } catch { /* use what we have */ }
-  }
-
-  listEl.innerHTML = portfolios.map(pf => {
-    const markets = pf.markets.map(ticker => {
-      const m = marketData.find(d => d.ticker === ticker);
-      return { ticker, market: m };
-    });
-
-    return `
-      <div class="portfolio-item" data-pf-id="${pf.id}">
-        <div class="portfolio-item-header">
-          <span class="portfolio-name">${pf.name}</span>
-          <button class="btn btn-sm btn-danger delete-pf-btn" data-pf-id="${pf.id}">🗑</button>
-        </div>
-        ${markets.length > 0
-          ? markets.map(({ ticker, market }) => `
-            <div class="portfolio-market">
-              <span class="portfolio-market-title">${market?.title || ticker}</span>
-              <span class="portfolio-market-prob">${market ? formatProb(market.last_price_dollars) : '—'}</span>
-              <button class="remove-market-btn" data-pf-id="${pf.id}" data-ticker="${ticker}">×</button>
-            </div>
-          `).join('')
-          : '<div style="padding:0.5rem 0;color:var(--text-muted);font-size:0.8125rem;">No markets added</div>'
-        }
-      </div>
-    `;
-  }).join('');
-
-  listEl.querySelectorAll('.delete-pf-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      deletePortfolio(btn.dataset.pfId);
-      renderPortfolioList();
-    });
-  });
-
-  listEl.querySelectorAll('.remove-market-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      removeMarketFromPortfolio(btn.dataset.pfId, btn.dataset.ticker);
-      renderPortfolioList();
-    });
-  });
-}
-
-function showQuickAddToPortfolio(ticker) {
-  const portfolios = getPortfolios();
-  if (portfolios.length === 0) {
-    document.getElementById('portfolio-sidebar').classList.remove('hidden');
-    return;
-  }
-
-  const modal = document.getElementById('add-modal');
-  const title = document.getElementById('add-modal-title');
-  const body = document.getElementById('add-modal-body');
-
-  title.textContent = 'Add to Portfolio';
-  body.innerHTML = portfolios.map(p => `
-    <div class="search-result-item" data-pf-id="${p.id}" style="margin-bottom:0.375rem;cursor:pointer;">
-      <span>💼 ${p.name}</span>
-      <span style="color:var(--text-muted);font-size:0.75rem;">${p.markets.length} markets</span>
-    </div>
-  `).join('');
-
-  body.querySelectorAll('[data-pf-id]').forEach(opt => {
-    opt.addEventListener('click', () => {
-      addMarketToPortfolio(opt.dataset.pfId, ticker);
-      modal.classList.add('hidden');
-    });
-  });
-
-  const closeBtn = modal.querySelector('.modal-close');
-  const backdrop = modal.querySelector('.modal-backdrop');
-  closeBtn.onclick = () => modal.classList.add('hidden');
-  backdrop.onclick = () => modal.classList.add('hidden');
-
-  modal.classList.remove('hidden');
+    </details>`;
 }
 
 // ===== Error Display =====
 function showError(message) {
   const existing = document.querySelector('.error-banner');
   if (existing) existing.remove();
-
   const banner = document.createElement('div');
   banner.className = 'error-banner';
   banner.textContent = message;
   document.querySelector('main').prepend(banner);
 }
 
-// ===== Callback for search/add/config =====
+// ===== Callbacks =====
 async function handleMarketAdded() {
   await fetchAllMarkets();
-  if (currentView === 'grid') {
-    renderCategoryGrid();
-  } else if (currentView === 'detail' && currentCategoryId) {
-    showCategoryDetail(currentCategoryId);
-  }
+  if (currentView === 'grid') renderCategoryGrid();
+  else if (currentView === 'detail' && currentCategoryId) showCategoryDetail(currentCategoryId);
 }
 
 // ===== Start =====

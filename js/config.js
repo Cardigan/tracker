@@ -9,6 +9,17 @@ import {
 let onConfigChanged = null;
 let onConfigReset = null;
 
+/** Programmatically open the config modal from outside this module */
+export function openConfig(tab = 'categories') {
+  const modal = document.getElementById('config-modal');
+  if (!modal) return;
+  modal.querySelectorAll('.config-tab-btn').forEach(t => t.classList.remove('active'));
+  const activeTab = modal.querySelector(`.config-tab-btn[data-tab="${tab}"]`);
+  if (activeTab) activeTab.classList.add('active');
+  renderTab(tab);
+  modal.classList.remove('hidden');
+}
+
 export function initConfig(onChange, onReset) {
   onConfigChanged = onChange;
   onConfigReset = onReset;
@@ -174,11 +185,8 @@ function renderMappingRows(filterCatId) {
       <div class="config-item">
         ${badge}
         <div style="flex:1;min-width:0;">
-          <div style="font-size:0.875rem;font-weight:500;font-family:monospace;">${m.ticker}</div>
-          <div style="font-size:0.75rem;color:var(--text-muted);">
-            ${cat ? `${cat.emoji} ${cat.name}` : m.categoryId} ·
-            ${m.direction === 1 ? '↑ Rising supports' : '↓ Falling supports'}
-          </div>
+          <div style="font-size:0.875rem;font-weight:500;">${m.title || m.ticker}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${m.ticker} · ${cat ? `${cat.emoji} ${cat.name}` : m.categoryId} · ${m.direction === 1 ? '↑' : '↓'}</div>
         </div>
         <button class="btn btn-sm btn-danger remove-mapping-btn"
           data-ticker="${m.ticker}" data-cat="${m.categoryId}">Remove</button>

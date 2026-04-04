@@ -1,5 +1,6 @@
 // Market detail overlay with historical chart
 import { getMarketTrades, buildKalshiUrl } from './api.js';
+import { MARKET_MAPPINGS, getCategoryById } from './categories.js';
 
 let currentMarket = null;
 let allTrades = [];
@@ -52,6 +53,22 @@ export async function openDetail(market) {
   modal.querySelector('.detail-volume-label').textContent = market.volume_24h_fp || '—';
   const link = modal.querySelector('.detail-kalshi-link');
   link.href = buildKalshiUrl(market);
+
+  // Category pills
+  const pillsEl = modal.querySelector('#detail-category-pills');
+  if (pillsEl) {
+    const catIds = [...new Set(MARKET_MAPPINGS.filter(m => m.ticker === market.ticker).map(m => m.categoryId))];
+    if (catIds.length > 0) {
+      pillsEl.innerHTML = catIds.map(id => {
+        const cat = getCategoryById(id);
+        return cat ? `<span class="detail-cat-pill">${cat.emoji} ${cat.name}</span>` : '';
+      }).join('');
+      pillsEl.style.display = 'flex';
+    } else {
+      pillsEl.innerHTML = '';
+      pillsEl.style.display = 'none';
+    }
+  }
 
   // Reset range buttons
   modal.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));

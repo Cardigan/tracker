@@ -637,6 +637,20 @@ a:hover { text-decoration: underline; }
 .direction-btn:hover { border-color: var(--accent); color: var(--text-primary); }
 .direction-btn.selected { border-color: var(--accent); background: var(--accent); color: #fff; }
 
+/* ===== Category Pills (detail modal) ===== */
+.detail-cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 /* ===== Market Detail Modal ===== */
 .modal-detail {
   max-width: 760px;
