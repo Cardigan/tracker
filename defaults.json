@@ -1,0 +1,125 @@
+{
+  "_comment": "Edit this file to add/remove default categories and market mappings. Push to deploy — no code changes needed.",
+  "categories": [
+    {
+      "id": "things-getting-worse",
+      "name": "Things Getting Worse",
+      "emoji": "📉",
+      "description": "Economic downturns, rising costs, and declining conditions"
+    },
+    {
+      "id": "ai-taking-over",
+      "name": "AI Taking Over",
+      "emoji": "🤖",
+      "description": "AI milestones, regulation, and industry disruption"
+    },
+    {
+      "id": "time-to-leave-the-city",
+      "name": "Time to Leave the City",
+      "emoji": "🏃",
+      "description": "Urban flight, remote work trends, and housing shifts"
+    },
+    {
+      "id": "end-of-the-world",
+      "name": "End of the World (but maybe)",
+      "emoji": "🌍",
+      "description": "Existential risks, geopolitical tensions, and doomsday scenarios"
+    },
+    {
+      "id": "things-heating-up",
+      "name": "Things Heating Up",
+      "emoji": "🔥",
+      "description": "Climate milestones, temperature records, and environmental events"
+    },
+    {
+      "id": "cooling-off",
+      "name": "Cooling Off",
+      "emoji": "🧊",
+      "description": "Market corrections, hype cycles fading, and de-escalation"
+    },
+    {
+      "id": "human-behavior-weird",
+      "name": "Human Behavior is Weird",
+      "emoji": "🤪",
+      "description": "Unusual social trends, celebrity events, and viral moments"
+    },
+    {
+      "id": "scifi-becoming-real",
+      "name": "Science Fiction Becoming Real",
+      "emoji": "🚀",
+      "description": "Space exploration, biotech breakthroughs, and futuristic tech"
+    },
+    {
+      "id": "chaos-index",
+      "name": "Chaos Index",
+      "emoji": "🎲",
+      "description": "Political surprises, government shutdowns, and black swan events"
+    },
+    {
+      "id": "someones-about-to-win",
+      "name": "Someone's About to Win",
+      "emoji": "🏆",
+      "description": "Elections, competitions, and races nearing their conclusion"
+    }
+  ],
+  "mappings": [
+    { "ticker": "KXU3MAX-30-10",            "categoryId": "things-getting-worse",    "direction":  1 },
+    { "ticker": "KXDEBTGROWTH-28DEC31-50",  "categoryId": "things-getting-worse",    "direction":  1 },
+    { "ticker": "CHINAUSGDP-30",            "categoryId": "things-getting-worse",    "direction":  1 },
+    { "ticker": "KXGDPSHAREMANU-29",        "categoryId": "things-getting-worse",    "direction": -1 },
+
+    { "ticker": "KXAGICO-COMP-27Q1",        "categoryId": "ai-taking-over",          "direction":  1 },
+    { "ticker": "KXAGICO-COMP-27Q2",        "categoryId": "ai-taking-over",          "direction":  1 },
+    { "ticker": "KXAGICO-COMP-27Q3",        "categoryId": "ai-taking-over",          "direction":  1 },
+    { "ticker": "KXUSTAKEOVER-30",          "categoryId": "ai-taking-over",          "direction":  1 },
+    { "ticker": "KXOAIANTH-40-OAI",        "categoryId": "ai-taking-over",          "direction":  1 },
+    { "ticker": "KXROBOTMARS-35",           "categoryId": "ai-taking-over",          "direction":  1 },
+
+    { "ticker": "KXPOPCHANGESTATE10-35",    "categoryId": "time-to-leave-the-city",  "direction":  1 },
+    { "ticker": "KXCASECESSION-30",         "categoryId": "time-to-leave-the-city",  "direction":  1 },
+    { "ticker": "KXEARTHQUAKECALIFORNIA-35","categoryId": "time-to-leave-the-city",  "direction":  1 },
+
+    { "ticker": "KXERUPTSUPER-0-50JAN01",   "categoryId": "end-of-the-world",        "direction":  1 },
+    { "ticker": "KXEARTHQUAKEJAPAN-30",     "categoryId": "end-of-the-world",        "direction":  1 },
+    { "ticker": "KXEARTHQUAKECALIFORNIA-35","categoryId": "end-of-the-world",        "direction":  1 },
+    { "ticker": "KXTAIWANLVL4-29JAN01",     "categoryId": "end-of-the-world",        "direction":  1 },
+    { "ticker": "KXTAIWANLVL4-30JAN01",     "categoryId": "end-of-the-world",        "direction":  1 },
+
+    { "ticker": "KXWARMING-50",             "categoryId": "things-heating-up",       "direction":  1 },
+    { "ticker": "KXCO2LEVEL-30-445",        "categoryId": "things-heating-up",       "direction":  1 },
+    { "ticker": "KXCO2LEVEL-30-450",        "categoryId": "things-heating-up",       "direction":  1 },
+    { "ticker": "USCLIMATE-2030",           "categoryId": "things-heating-up",       "direction": -1 },
+    { "ticker": "EUCLIMATE-2030",           "categoryId": "things-heating-up",       "direction": -1 },
+
+    { "ticker": "KXGOVTCUTS-28-500",        "categoryId": "cooling-off",             "direction":  1 },
+    { "ticker": "KXGOVTCUTS-28-1000",       "categoryId": "cooling-off",             "direction":  1 },
+    { "ticker": "KXBALANCE-29",             "categoryId": "cooling-off",             "direction":  1 },
+    { "ticker": "KXFDATYPE1DIABETES-33",    "categoryId": "cooling-off",             "direction":  1 },
+    { "ticker": "KXPOLIOELIM-30",           "categoryId": "cooling-off",             "direction":  1 },
+
+    { "ticker": "KXMUSKTRILLION-27",        "categoryId": "human-behavior-weird",    "direction":  1 },
+    { "ticker": "KXTRILLIONAIRE-30-EM",     "categoryId": "human-behavior-weird",    "direction":  1 },
+    { "ticker": "KXTRILLIONAIRE-30-JH",     "categoryId": "human-behavior-weird",    "direction":  1 },
+    { "ticker": "KXELONMARS-99",            "categoryId": "human-behavior-weird",    "direction":  1 },
+
+    { "ticker": "KXFUSION-30-JAN01",        "categoryId": "scifi-becoming-real",     "direction":  1 },
+    { "ticker": "KXSPACEXMARS-30",          "categoryId": "scifi-becoming-real",     "direction":  1 },
+    { "ticker": "STARSHIPMARS-29DEC31",     "categoryId": "scifi-becoming-real",     "direction":  1 },
+    { "ticker": "KXCOLONIZEMARS-50",        "categoryId": "scifi-becoming-real",     "direction":  1 },
+    { "ticker": "KXDATACENTER-30",          "categoryId": "scifi-becoming-real",     "direction":  1 },
+    { "ticker": "KXMARSVRAIL-50",           "categoryId": "scifi-becoming-real",     "direction": -1 },
+
+    { "ticker": "KXFULLTERMSKPRES-29",      "categoryId": "chaos-index",             "direction": -1 },
+    { "ticker": "KXNEXTSPEAKER-31-SSCA",    "categoryId": "chaos-index",             "direction":  1 },
+    { "ticker": "KXNEXTSPEAKER-31-JJOR",    "categoryId": "chaos-index",             "direction":  1 },
+    { "ticker": "KXG7LEADEROUT-45JAN01-EMAC","categoryId": "chaos-index",            "direction":  1 },
+    { "ticker": "AMAZONFTC-29DEC31",        "categoryId": "chaos-index",             "direction":  1 },
+    { "ticker": "APPLEUS-29DEC31",          "categoryId": "chaos-index",             "direction":  1 },
+
+    { "ticker": "KXTIMEDECADE20S-30-EMUS",  "categoryId": "someones-about-to-win",   "direction":  1 },
+    { "ticker": "KXTIMEDECADE20S-30-XJIN",  "categoryId": "someones-about-to-win",   "direction":  1 },
+    { "ticker": "KXOAIANTH-40-ANTH",        "categoryId": "someones-about-to-win",   "direction":  1 },
+    { "ticker": "KXDEELRIP-40-DEEL",        "categoryId": "someones-about-to-win",   "direction":  1 },
+    { "ticker": "EVSHARE-30JAN-30",         "categoryId": "someones-about-to-win",   "direction":  1 }
+  ]
+}

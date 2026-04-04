@@ -15,6 +15,7 @@
     <div class="header-actions">
       <button id="search-btn" class="btn btn-primary" title="Search markets">🔍 Search</button>
       <button id="portfolio-btn" class="btn btn-secondary" title="My portfolios">💼 Portfolios</button>
+      <button id="config-btn" class="btn btn-secondary" title="Configuration">⚙</button>
     </div>
   </header>
 
@@ -65,8 +66,59 @@
     </div>
   </div>
 
+  <!-- Market Detail Overlay -->
+  <div id="detail-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-detail">
+      <div class="modal-header">
+        <div style="flex:1;min-width:0;">
+          <h2 class="detail-market-title" style="font-size:1rem;line-height:1.4;white-space:normal;"></h2>
+          <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+            <span class="detail-market-prob-display" style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;"></span>
+            <div style="font-size:0.8125rem;color:var(--text-muted);">
+              <span>Ticker: </span><span class="detail-ticker-label" style="font-family:monospace;"></span>
+              <span style="margin-left:1rem;">Vol 24h: </span><span class="detail-volume-label"></span>
+            </div>
+            <a class="detail-kalshi-link market-link" href="#" target="_blank" rel="noopener">↗ View on Kalshi</a>
+          </div>
+        </div>
+        <button class="modal-close" style="align-self:flex-start;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="range-selector">
+          <button class="range-btn" data-range="1h">1H</button>
+          <button class="range-btn" data-range="1w">1W</button>
+          <button class="range-btn" data-range="1m">1M</button>
+          <button class="range-btn" data-range="6m">6M</button>
+          <button class="range-btn" data-range="1y">1Y</button>
+          <button class="range-btn" data-range="5y">5Y</button>
+          <button class="range-btn active" data-range="all">ALL</button>
+        </div>
+        <div class="detail-chart-area">
+          <canvas class="detail-chart-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Modal -->
+  <div id="config-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-config">
+      <div class="modal-header">
+        <h2>⚙ Configuration</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="config-tabs">
+        <button class="config-tab-btn active" data-tab="categories">Categories</button>
+        <button class="config-tab-btn" data-tab="markets">Market Mappings</button>
+      </div>
+      <div class="modal-body" id="config-modal-body"></div>
+    </div>
+  </div>
+
   <footer class="footer">
-    <p>Data from <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> · Prices update every 15 min</p>
+    <p>Data from <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> · Prices update every 15 min · <span id="version-display" style="color:var(--text-muted);"></span></p>
   </footer>
 
   <script type="module" src="js/app.js"></script>

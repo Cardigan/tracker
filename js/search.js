@@ -5,11 +5,31 @@ import { getPortfolios, addMarketToPortfolio } from './portfolio.js';
 import { formatProb } from './trend.js';
 
 let debounceTimer = null;
-let onMarketAdded = null; // callback when a market is added to category/portfolio
+let onMarketAdded = null;
+let getLoadedMarkets = () => [];
+
+/** Returns true if a market looks like a sports bundle/parlay market */
+function isBundleMarket(market) {
+  const title = (market.title || '').trim();
+  // Bundle titles look like: "yes Aaron Gordon: 5+,yes Cameron Johnson: 4+,..."
+  if (/^(yes|no)\s+\w/i.test(title)) return true;
+  if ((title.match(/,\s*(yes|no)\s+/gi) || []).length >= 2) return true;
+  return false;
+}
+
+/** Search within already-loaded markets */
+function searchLocalMarkets(term, loadedMarkets) {
+  const q = term.toLowerCase();
+  return loadedMarkets.filter(m =>
+    (m.title || '').toLowerCase().includes(q) ||
+    (m.ticker || '').toLowerCase().includes(q)
+  );
+}
 
 /** Initialize search modal */
-export function initSearch(onAdded) {
+export function initSearch(onAdded, getMarkets) {
   onMarketAdded = onAdded;
+  if (getMarkets) getLoadedMarkets = getMarkets;
 
   const modal = document.getElementById('search-modal');
   const searchBtn = document.getElementById('search-btn');
@@ -51,22 +71,33 @@ async function handleSearch(term) {
   resultsEl.innerHTML = '<div class="skeleton skeleton-market" style="height:40px;margin-bottom:8px"></div>'.repeat(3);
 
   try {
-    const markets = await searchMarketsAPI(term);
+    // Search locally first
+    const localResults = searchLocalMarkets(term, getLoadedMarkets());
 
-    if (markets.length === 0) {
+    // Fetch from API in parallel
+    const apiResults = await searchMarketsAPI(term, 30);
+
+    // Merge: local results first, then API results not already in local
+    const localTickers = new Set(localResults.map(m => m.ticker));
+    const merged = [
+      ...localResults,
+      ...apiResults.filter(m => !localTickers.has(m.ticker) && !isBundleMarket(m)),
+    ];
+
+    if (merged.length === 0) {
       resultsEl.innerHTML = '<div class="empty-state"><div class="empty-state-emoji">🔍</div><p class="empty-state-text">No open markets found</p></div>';
       return;
     }
 
-    resultsEl.innerHTML = markets.map(m => renderSearchResult(m)).join('');
-    attachSearchResultListeners(markets);
+    resultsEl.innerHTML = merged.map(m => renderSearchResult(m)).join('');
+    attachSearchResultListeners(merged);
   } catch (err) {
     resultsEl.innerHTML = `<div class="error-banner">Search failed: ${err.message}</div>`;
   }
 }
 
 function renderSearchResult(market) {
-  const prob = formatProb(market.last_price_dollars || market.yes_bid_dollars);
+  const prob = formatProb(market.last_price_dollars || market.yes_bid_dollars || market.currentProb);
   return `
     <div class="search-result-item" data-ticker="${market.ticker}">
       <span class="search-result-title">${market.title || market.ticker}</span>
@@ -80,7 +111,6 @@ function renderSearchResult(market) {
 }
 
 function attachSearchResultListeners(markets) {
-  // Add to category buttons
   document.querySelectorAll('.add-to-category-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -90,7 +120,6 @@ function attachSearchResultListeners(markets) {
     });
   });
 
-  // Add to portfolio buttons
   document.querySelectorAll('.add-to-portfolio-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -146,7 +175,6 @@ function showAddToCategoryModal(market) {
     });
   });
 
-  // Close handlers
   const closeBtn = modal.querySelector('.modal-close');
   const backdrop = modal.querySelector('.modal-backdrop');
   closeBtn.onclick = () => modal.classList.add('hidden');
