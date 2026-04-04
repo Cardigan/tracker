@@ -64,7 +64,9 @@ function renderCategoriesTab(body) {
       <div class="config-add-form">
         <h4 style="margin-bottom:0.75rem;color:var(--text-secondary);font-size:0.875rem;">Add Category</h4>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-          <input type="text" id="new-cat-emoji" class="input" placeholder="Emoji" style="width:72px;flex-shrink:0;">
+          <div class="emoji-input-wrap" style="flex-shrink:0;">
+            <input type="text" id="new-cat-emoji" class="input" placeholder="😀" style="width:72px;cursor:pointer;" readonly>
+          </div>
           <input type="text" id="new-cat-name"  class="input" placeholder="Name" style="flex:1;min-width:120px;">
           <input type="text" id="new-cat-desc"  class="input" placeholder="Description" style="flex:2;min-width:180px;">
           <button class="btn btn-primary" id="add-cat-btn">Add</button>
@@ -95,6 +97,46 @@ function renderCategoryRow(cat) {
   `;
 }
 
+const EMOJI_LIST = [
+  '🌍','🌎','🌏','🗺️','🌐','🏔️','🏝️','🌊',
+  '🌋','🔥','⚡','☄️','🌪️','❄️','🌡️','☀️',
+  '🤖','💻','🔬','🧬','🚀','⚙️','💡','🔭',
+  '💰','📈','📉','💹','🏦','💵','🏭','🏗️',
+  '🏛️','⚖️','🗳️','📜','✊','🤝','👥','🌱',
+  '🏥','💊','🧪','🩺','🫀','🧠','🩸','🦠',
+  '🛸','🌙','⭐','🌟','🪐','🌠','🛰️','☢️',
+  '⚠️','📡','🔔','🏆','🎯','💣','🛡️','📊',
+];
+
+function attachEmojiPicker(body) {
+  const input = body.querySelector('#new-cat-emoji');
+  if (!input) return;
+
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker';
+  picker.setAttribute('role', 'dialog');
+  picker.innerHTML = EMOJI_LIST.map(e => `<button type="button" class="emoji-btn">${e}</button>`).join('');
+  input.closest('.emoji-input-wrap').appendChild(picker);
+
+  input.addEventListener('click', () => {
+    picker.classList.toggle('open');
+  });
+
+  picker.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      input.value = btn.textContent;
+      picker.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('click', function closePicker(e) {
+    if (!input.closest('.emoji-input-wrap').contains(e.target)) {
+      picker.classList.remove('open');
+    }
+  });
+}
+
 function attachCategoryListeners(body) {
   body.querySelectorAll('.remove-cat-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -105,6 +147,8 @@ function attachCategoryListeners(body) {
       if (onConfigChanged) onConfigChanged();
     });
   });
+
+  attachEmojiPicker(body);
 
   body.querySelector('#add-cat-btn')?.addEventListener('click', () => {
     const emoji = body.querySelector('#new-cat-emoji').value.trim() || '📌';
