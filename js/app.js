@@ -9,13 +9,11 @@ import { initConfig, openConfig } from './config.js';
 // ===== State =====
 let allMarkets = [];
 let trendingByCategory = new Map();
-let currentView = 'grid';
-let currentCategoryId = null;
+let currentFilterCategoryId = null;
 let isLoading = true;
 
 // ===== DOM References =====
 const gridEl = document.getElementById('categories-grid');
-const detailEl = document.getElementById('category-detail');
 
 // ===== Init =====
 async function init() {
@@ -36,17 +34,20 @@ async function init() {
   // 💼 Manage button opens config
   document.getElementById('portfolio-btn')?.addEventListener('click', () => openConfig('categories'));
 
+  document.getElementById('show-all-btn')?.addEventListener('click', () => renderMarketList(null));
+
   renderLoadingGrid();
   loadVersion();
   await fetchAllMarkets();
   renderCategoryGrid();
+  renderMarketList();
 }
 
 async function handleConfigReset() {
   resetToDefaults();
   await fetchAllMarkets();
-  if (currentView === 'grid') renderCategoryGrid();
-  else if (currentView === 'detail' && currentCategoryId) showCategoryDetail(currentCategoryId);
+  renderCategoryGrid();
+  renderMarketList(null);
 }
 
 // ===== Version Display =====
@@ -143,10 +144,6 @@ function renderLoadingGrid() {
 }
 
 function renderCategoryGrid() {
-  currentView = 'grid';
-  detailEl.classList.add('hidden');
-  gridEl.classList.remove('hidden');
-
   if (allMarkets.length === 0 && !isLoading) {
     gridEl.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;">
@@ -166,8 +163,9 @@ function renderCategoryGrid() {
     const count = trending.length;
     const total = getMappingsForCategory(cat.id).length;
     const isActive = count > 0;
+    const isFiltered = cat.id === currentFilterCategoryId;
     return `
-      <div class="category-card ${isActive ? 'active' : ''}" data-cat-id="${cat.id}">
+      <div class="category-card ${isActive ? 'active' : ''}${isFiltered ? ' category-card-filtered' : ''}" data-cat-id="${cat.id}">
         <div class="category-pulse ${isActive ? '' : 'inactive'}"></div>
         <div class="category-emoji">${cat.emoji}</div>
         <div class="category-name">${cat.name}</div>
@@ -181,25 +179,55 @@ function renderCategoryGrid() {
   }).join('');
 
   gridEl.querySelectorAll('.category-card').forEach(card => {
-    card.addEventListener('click', () => showCategoryDetail(card.dataset.catId));
+    card.addEventListener('click', () => renderMarketList(card.dataset.catId));
   });
 }
 
-// ===== Category Detail =====
-function showCategoryDetail(categoryId) {
-  currentView = 'detail';
-  currentCategoryId = categoryId;
-  const cat = getCategoryById(categoryId);
-  if (!cat) return;
+// ===== Market List =====
+function renderMarketList(categoryId = null) {
+  currentFilterCategoryId = categoryId;
 
-  const allMappings = getMappingsForCategory(categoryId);
+  const marketListEl = document.getElementById('market-list');
+  const titleEl      = document.getElementById('market-list-title');
+  const showAllBtn   = document.getElementById('show-all-btn');
+  if (!marketListEl) return;
 
-  // Build flat list with trend data for every mapped market
-  const markets = allMappings.map(mapping => {
+  const mappings = categoryId ? getMappingsForCategory(categoryId) : MARKET_MAPPINGS;
+  const markets  = buildMarketsForList(mappings);
+
+  if (titleEl) {
+    if (categoryId) {
+      const cat = getCategoryById(categoryId);
+      titleEl.textContent = cat ? `${cat.emoji} ${cat.name} — ${markets.length} market${markets.length !== 1 ? 's' : ''}` : '';
+    } else {
+      titleEl.textContent = `All tracked markets — ${markets.length}`;
+    }
+  }
+  if (showAllBtn) showAllBtn.classList.toggle('hidden', !categoryId);
+
+  // Highlight filtered category card
+  document.querySelectorAll('.category-card').forEach(card => {
+    card.classList.toggle('category-card-filtered', card.dataset.catId === categoryId);
+  });
+
+  marketListEl.innerHTML = markets.length > 0
+    ? markets.map(m => renderMarketCard(m)).join('')
+    : renderEmptyDetail(mappings.length);
+
+  attachMarketCardListeners(marketListEl);
+  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+}
+
+function buildMarketsForList(mappings) {
+  const seen = new Set();
+  const markets = [];
+  for (const mapping of mappings) {
+    if (seen.has(mapping.ticker)) continue;
+    seen.add(mapping.ticker);
     const market = allMarkets.find(m => m.ticker === mapping.ticker);
-    if (!market) return null;
+    if (!market) continue;
     const { trend, current, previous, hasPrevious } = computeTrend(market, mapping.direction);
-    return {
+    markets.push({
       ...market,
       direction: mapping.direction,
       trend,
@@ -207,34 +235,13 @@ function showCategoryDetail(categoryId) {
       previousProb: previous,
       trendPercent: hasPrevious ? Math.abs(current - previous) * 100 : 0,
       _isActive: trend > 0.001,
-    };
-  }).filter(Boolean);
-
-  // Active (trending) first, then inactive; within each group sort by trend magnitude
+    });
+  }
   markets.sort((a, b) => {
     if (a._isActive !== b._isActive) return a._isActive ? -1 : 1;
     return Math.abs(b.trend) - Math.abs(a.trend);
   });
-
-  gridEl.classList.add('hidden');
-  detailEl.classList.remove('hidden');
-
-  detailEl.innerHTML = `
-    <div class="detail-header">
-      <div>
-        <button class="back-btn" id="back-btn">← Back to categories</button>
-        <h2 class="detail-title">${cat.emoji} ${cat.name}</h2>
-        <p style="color:var(--text-secondary);font-size:0.875rem;margin-top:0.25rem;">${cat.description}</p>
-      </div>
-    </div>
-    <div class="market-list" id="market-list">
-      ${markets.length > 0 ? markets.map(m => renderMarketCard(m)).join('') : renderEmptyDetail(allMappings.length)}
-    </div>
-  `;
-
-  document.getElementById('back-btn').addEventListener('click', () => renderCategoryGrid());
-  attachMarketCardListeners(detailEl);
-  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+  return markets;
 }
 
 function attachMarketCardListeners(container) {
@@ -542,8 +549,8 @@ function showError(message) {
 // ===== Callbacks =====
 async function handleMarketAdded() {
   await fetchAllMarkets();
-  if (currentView === 'grid') renderCategoryGrid();
-  else if (currentView === 'detail' && currentCategoryId) showCategoryDetail(currentCategoryId);
+  renderCategoryGrid();
+  renderMarketList(currentFilterCategoryId);
 }
 
 // ===== Start =====

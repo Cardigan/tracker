@@ -151,6 +151,12 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
 }
 
+.category-card.category-card-filtered {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
 .category-emoji {
   font-size: 2rem;
   margin-bottom: 0.75rem;
@@ -193,11 +199,26 @@ a:hover { text-decoration: underline; }
   50% { opacity: 0.5; transform: scale(1.3); }
 }
 
-/* ===== Category Detail ===== */
-.category-detail {
+/* ===== Market List Section ===== */
+.market-list-section {
   padding: 0 2rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.market-list-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.market-list-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .detail-header {
@@ -704,12 +725,18 @@ a:hover { text-decoration: underline; }
 }
 
 /* ===== Category Tile Modal ===== */
-#cat-tile-modal { z-index: 500; }
+#cat-tile-modal {
+  z-index: 500;
+  align-items: flex-start;
+  padding-top: 2rem;
+}
 
 .modal-cat-tile {
-  max-width: 95vw;
-  width: 95vw;
-  max-height: 88vh;
+  max-width: 96vw;
+  width: 96vw;
+  height: 90vh;
+  max-height: 90vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -717,7 +744,8 @@ a:hover { text-decoration: underline; }
 .modal-cat-tile .modal-body {
   overflow-y: auto;
   flex: 1;
-  padding: 1rem 1.25rem 1.25rem;
+  min-height: 0;
+  padding: 0.75rem 1.25rem 1.25rem;
 }
 
 .cat-tile-grid {
