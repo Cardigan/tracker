@@ -358,7 +358,7 @@ a:hover { text-decoration: underline; }
 
 .modal-sm { max-width: 400px; }
 
-#add-modal { z-index: 300; }
+#add-modal { z-index: 1000; }
 
 .modal-header {
   display: flex;
