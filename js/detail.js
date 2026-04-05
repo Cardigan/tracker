@@ -1,5 +1,5 @@
 // Market detail overlay with historical chart
-import { getMarketTrades, buildKalshiUrl } from './api.js';
+import { getMarketTrades } from './api.js';
 import { MARKET_MAPPINGS, getCategoryById } from './categories.js';
 
 let currentMarket = null;
@@ -51,8 +51,6 @@ export async function openDetail(market) {
   modal.querySelector('.detail-market-prob-display').textContent = `${prob}%`;
   modal.querySelector('.detail-ticker-label').textContent = market.ticker;
   modal.querySelector('.detail-volume-label').textContent = market.volume_24h_fp || '—';
-  const link = modal.querySelector('.detail-kalshi-link');
-  link.href = buildKalshiUrl(market);
 
   // Category pills
   const pillsEl = modal.querySelector('#detail-category-pills');

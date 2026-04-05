@@ -1,5 +1,5 @@
 // Main application — orchestration and rendering
-import { getMarkets, getMarketTrades, isUsingMockData, buildKalshiUrl, fetchDefaults } from './api.js';
+import { getMarkets, getMarketTrades, isUsingMockData, fetchDefaults } from './api.js';
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById, initDefaults, resetToDefaults } from './categories.js';
 import { getTrendingByCategory, formatProb, formatTrend, computeTrend } from './trend.js';
 import { initSearch, showAddToCategoryModal } from './search.js';
@@ -276,7 +276,7 @@ function renderMarketCard(market) {
       </div>
       <div class="market-actions">
         <button class="btn btn-sm add-to-cat-btn" data-ticker="${market.ticker}" title="Add to category">＋</button>
-        <a class="market-link" href="${buildKalshiUrl(market)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Kalshi</a>
+        <span class="market-ticker-copy" title="${market.ticker}">${market.ticker}</span>
       </div>
     </div>`;
 }
@@ -328,7 +328,7 @@ function renderInactiveSection(allMappings, trending) {
               </div>
               <div class="market-trend" style="color:var(--text-muted)"><span>—</span></div>
               <div class="market-actions">
-                <a class="market-link" href="${buildKalshiUrl(m)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ Kalshi</a>
+                <span class="market-ticker-copy" title="${m.ticker}">${m.ticker}</span>
               </div>
             </div>`;
         }).join('')}

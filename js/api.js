@@ -191,11 +191,6 @@ export async function fetchDefaults() {
   }
 }
 
-/** Build a Kalshi search URL pre-filled with the market title or ticker */
-export function buildKalshiUrl(market) {
-  const query = encodeURIComponent(market.title || market.ticker);
-  return `https://kalshi.com/markets?search=${query}`;
-}
 
 /** Search markets using the Kalshi search parameter */
 export async function searchMarketsAPI(term, limit = 20) {
