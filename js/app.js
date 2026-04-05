@@ -1,5 +1,5 @@
 // Main application — orchestration and rendering
-import { getMarkets, getMarketTrades, isUsingMockData, enrichMarketsWithSlugs, buildKalshiUrl, fetchDefaults } from './api.js';
+import { getMarkets, getMarketTrades, isUsingMockData, buildKalshiUrl, fetchDefaults } from './api.js';
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById, initDefaults, resetToDefaults } from './categories.js';
 import { getTrendingByCategory, formatProb, formatTrend, computeTrend } from './trend.js';
 import { initSearch, showAddToCategoryModal } from './search.js';
@@ -60,8 +60,7 @@ async function fetchAllMarkets() {
   const previousMarkets = allMarkets;
 
   try {
-    let markets = await getMarkets(tickers);
-    markets = await enrichMarketsWithSlugs(markets);
+    const markets = await getMarkets(tickers);
     allMarkets = markets;
     trendingByCategory = getTrendingByCategory(allMarkets, MARKET_MAPPINGS, CATEGORIES);
   } catch (err) {

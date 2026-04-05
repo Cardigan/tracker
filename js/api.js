@@ -191,51 +191,10 @@ export async function fetchDefaults() {
   }
 }
 
-/** Fetch event data to get the URL slug */
-async function getEventSlug(eventTicker) {
-  const key = `eslug_${eventTicker}`;
-  const cached = getCached(key);
-  if (cached !== null && cached !== undefined) return cached || null;
-
-  try {
-    const data = await apiFetch(`/events/${encodeURIComponent(eventTicker)}`);
-    const event = data.event || data;
-    // Try multiple possible field names Kalshi might use
-    const slug = event.slug || event.event_slug || event.url_slug || event.mutually_exclusive_contract_group_slug || '';
-    setCache(key, slug);
-    return slug || null;
-  } catch {
-    setCache(key, '');
-    return null;
-  }
-}
-
-/** Enrich markets with their Kalshi event slug for proper URL construction */
-export async function enrichMarketsWithSlugs(markets) {
-  const eventTickers = [...new Set(
-    markets.map(m => m.event_ticker || m.ticker.replace(/-[^-]*$/, '')).filter(Boolean)
-  )];
-
-  const slugMap = {};
-  await Promise.all(eventTickers.map(async (et) => {
-    const slug = await getEventSlug(et);
-    if (slug) slugMap[et] = slug;
-  }));
-
-  return markets.map(m => {
-    const et = m.event_ticker || m.ticker.replace(/-[^-]*$/, '');
-    return slugMap[et] ? { ...m, _kalshiSlug: slugMap[et] } : m;
-  });
-}
-
-/** Build the correct Kalshi market URL */
+/** Build a Kalshi search URL pre-filled with the market title or ticker */
 export function buildKalshiUrl(market) {
-  const eventTicker = (market.event_ticker || market.ticker.replace(/-[^-]*$/, '')).toLowerCase();
-  const marketTicker = market.ticker.toLowerCase();
-  if (market._kalshiSlug) {
-    return `https://kalshi.com/markets/${eventTicker}/${market._kalshiSlug}/${marketTicker}`;
-  }
-  return `https://kalshi.com/markets/${eventTicker}/${marketTicker}`;
+  const query = encodeURIComponent(market.title || market.ticker);
+  return `https://kalshi.com/markets?search=${query}`;
 }
 
 /** Search markets using the Kalshi search parameter */
