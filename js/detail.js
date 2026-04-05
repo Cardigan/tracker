@@ -1,6 +1,7 @@
 // Market detail overlay with historical chart
 import { getMarketTrades } from './api.js';
 import { MARKET_MAPPINGS, getCategoryById } from './categories.js';
+import { showAddToCategoryModal } from './search.js';
 
 let currentMarket = null;
 let allTrades = [];
@@ -22,6 +23,9 @@ export function initDetail() {
 
   modal.querySelector('.modal-close').addEventListener('click', closeDetail);
   modal.querySelector('.modal-backdrop').addEventListener('click', closeDetail);
+  modal.querySelector('#detail-add-btn').addEventListener('click', () => {
+    if (currentMarket) showAddToCategoryModal(currentMarket);
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeDetail();
