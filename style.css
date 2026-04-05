@@ -358,6 +358,8 @@ a:hover { text-decoration: underline; }
 
 .modal-sm { max-width: 400px; }
 
+#add-modal { z-index: 300; }
+
 .modal-header {
   display: flex;
   justify-content: space-between;
