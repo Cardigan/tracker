@@ -318,6 +318,19 @@ function renderEmptyDetail(totalMapped) {
 }
 
 // ===== Category Tile Modal =====
+const catTileTradesCache = new Map(); // ticker → trades[]
+const catTileRanges     = new Map(); // ticker → range key
+
+const CAT_TILE_RANGES = {
+  '1h': 60 * 60 * 1000,
+  '1w': 7  * 24 * 60 * 60 * 1000,
+  '1m': 30 * 24 * 60 * 60 * 1000,
+  '6m': 180 * 24 * 60 * 60 * 1000,
+  '1y': 365 * 24 * 60 * 60 * 1000,
+  '5y': 5 * 365 * 24 * 60 * 60 * 1000,
+  'all': null,
+};
+
 function openCategoryTileModal(categoryId) {
   const cat = getCategoryById(categoryId);
   if (!cat) return;
@@ -337,19 +350,48 @@ function openCategoryTileModal(categoryId) {
   document.getElementById('cat-tile-title').textContent = `${cat.emoji} ${cat.name}`;
 
   const body = document.getElementById('cat-tile-body');
-  body.innerHTML = markets.length > 0
-    ? `<div class="cat-tile-grid">${markets.map(m => renderCatTile(m)).join('')}</div>`
-    : '<div class="empty-state"><p class="empty-state-text">No market data available for this category.</p></div>';
+  if (markets.length === 0) {
+    body.innerHTML = '<div class="empty-state"><p class="empty-state-text">No market data available for this category.</p></div>';
+    modal.classList.remove('hidden');
+    return;
+  }
 
+  body.innerHTML = `<div class="cat-tile-grid">${markets.map(renderCatTile).join('')}</div>`;
+
+  // Wire range buttons and open-detail click per tile
   body.querySelectorAll('.cat-tile').forEach(tile => {
-    tile.addEventListener('click', () => {
-      const market = markets.find(m => m.ticker === tile.dataset.ticker);
+    const ticker = tile.dataset.ticker;
+    catTileRanges.set(ticker, 'all');
+
+    tile.querySelector('.cat-tile-open')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const market = markets.find(m => m.ticker === ticker);
       if (market) openDetail(market);
+    });
+
+    tile.querySelectorAll('.range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        catTileRanges.set(ticker, btn.dataset.range);
+        tile.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const trades = catTileTradesCache.get(ticker) || [];
+        drawCatTileChart(tile, trades, catTileRanges.get(ticker));
+      });
     });
   });
 
   modal.classList.remove('hidden');
-  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+
+  // Fetch trades for all tiles in parallel and draw charts
+  markets.forEach(async (market) => {
+    const tile = body.querySelector(`.cat-tile[data-ticker="${market.ticker}"]`);
+    if (!tile) return;
+    try {
+      const trades = await getMarketTrades(market.ticker, 500);
+      catTileTradesCache.set(market.ticker, trades);
+      drawCatTileChart(tile, trades, catTileRanges.get(market.ticker) || 'all');
+    } catch { /* leave as loading */ }
+  });
 }
 
 function renderCatTile(market) {
@@ -362,13 +404,129 @@ function renderCatTile(market) {
 
   return `
     <div class="cat-tile${isActive ? '' : ' cat-tile-inactive'}" data-ticker="${market.ticker}">
-      <div class="cat-tile-title">${market.title || market.ticker}</div>
-      <div class="cat-tile-prob" style="color:${isActive ? barColor : 'var(--text-muted)'}">${prob}</div>
-      <canvas data-ticker="${market.ticker}" class="sparkline-canvas" style="width:100%;height:36px;display:block;margin:0.375rem 0;"></canvas>
-      <div class="cat-tile-trend${isActive ? (' ' + (isUp ? 'trend-up' : 'trend-down')) : ''}" style="${!isActive ? 'color:var(--text-muted);' : ''}">
-        ${isActive ? (isUp ? '▲' : '▼') + ' ' : ''}${trendText}
+      <div class="cat-tile-header">
+        <div style="flex:1;min-width:0;">
+          <div class="cat-tile-title">${market.title || market.ticker}</div>
+          <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.25rem;flex-wrap:wrap;">
+            <span class="cat-tile-prob" style="color:${isActive ? barColor : 'var(--text-muted)'}">${prob}</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${market.ticker}</span>
+            <span class="cat-tile-trend ${isActive ? (isUp ? 'trend-up' : 'trend-down') : ''}" style="${!isActive ? 'color:var(--text-muted);' : ''}font-size:0.8125rem;">
+              ${isActive ? (isUp ? '▲' : '▼') + ' ' : ''}${trendText}
+            </span>
+          </div>
+        </div>
+        <button class="btn btn-sm cat-tile-open" title="Open full chart">⤢</button>
+      </div>
+      <div class="range-selector" style="margin:0.625rem 0 0.375rem;">
+        <button class="range-btn" data-range="1h">1H</button>
+        <button class="range-btn" data-range="1w">1W</button>
+        <button class="range-btn" data-range="1m">1M</button>
+        <button class="range-btn" data-range="6m">6M</button>
+        <button class="range-btn" data-range="1y">1Y</button>
+        <button class="range-btn" data-range="5y">5Y</button>
+        <button class="range-btn active" data-range="all">ALL</button>
+      </div>
+      <div class="cat-tile-chart-area">
+        <canvas class="cat-tile-canvas"></canvas>
       </div>
     </div>`;
+}
+
+function drawCatTileChart(tile, allTrades, rangeKey) {
+  const canvas = tile.querySelector('.cat-tile-canvas');
+  if (!canvas) return;
+
+  const rangeMs = CAT_TILE_RANGES[rangeKey];
+  const trades = rangeMs !== null
+    ? allTrades.filter(t => t.time >= Date.now() - rangeMs)
+    : allTrades;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 400;
+  const h = canvas.clientHeight || 200;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  if (trades.length < 2) {
+    ctx.fillStyle = 'rgba(148,163,184,0.4)';
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(allTrades.length === 0 ? 'Loading…' : 'No data in range', w / 2, h / 2);
+    return;
+  }
+
+  const prices = trades.map(t => t.price);
+  const times  = trades.map(t => t.time);
+  const minP = Math.min(...prices), maxP = Math.max(...prices);
+  const range = maxP - minP || 0.01;
+  const pad = { top: 20, right: 12, bottom: 28, left: 44 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const xAt = i => pad.left + (i / (prices.length - 1)) * cw;
+  const yAt = p => pad.top + ch - ((p - minP) / range) * ch;
+
+  const isUp = prices[prices.length - 1] >= prices[0];
+  const lineColor  = isUp ? '#22c55e' : '#ef4444';
+  const fillColor  = isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+
+  // Grid + Y labels
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const p = minP + (range / 4) * (4 - i);
+    const y = pad.top + (ch / 4) * i;
+    ctx.strokeStyle = 'rgba(148,163,184,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(148,163,184,0.65)';
+    ctx.fillText(`${Math.round(p * 100)}%`, pad.left - 4, y + 3);
+  }
+
+  // Fill
+  ctx.beginPath();
+  ctx.moveTo(xAt(0), pad.top + ch);
+  for (let i = 0; i < prices.length; i++) ctx.lineTo(xAt(i), yAt(prices[i]));
+  ctx.lineTo(xAt(prices.length - 1), pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  for (let i = 0; i < prices.length; i++) {
+    if (i === 0) ctx.moveTo(xAt(0), yAt(prices[0]));
+    else ctx.lineTo(xAt(i), yAt(prices[i]));
+  }
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // End dot
+  ctx.beginPath();
+  ctx.arc(xAt(prices.length - 1), yAt(prices[prices.length - 1]), 3, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+
+  // X labels
+  ctx.fillStyle = 'rgba(148,163,184,0.65)';
+  ctx.font = '10px -apple-system, sans-serif';
+  [[0, 'left'], [Math.floor(prices.length / 2), 'center'], [prices.length - 1, 'right']].forEach(([i, align]) => {
+    const d = new Date(times[i]);
+    const diffDays = (Date.now() - times[i]) / 86400000;
+    const label = diffDays < 1
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : diffDays < 365
+        ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+        : d.toLocaleDateString([], { month: 'short', year: '2-digit' });
+    ctx.textAlign = align;
+    ctx.fillText(label, xAt(i), h - 6);
+  });
 }
 
 // ===== Error Display =====
