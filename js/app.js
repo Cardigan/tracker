@@ -23,8 +23,15 @@ async function init() {
   initDefaults(defaults);
 
   initSearch(handleMarketAdded, () => allMarkets);
-  initDetail();
+  initDetail(openCategoryTileModal);
   initConfig(handleMarketAdded, handleConfigReset);
+
+  const catTileModal = document.getElementById('cat-tile-modal');
+  catTileModal?.querySelector('.modal-close').addEventListener('click', () => catTileModal.classList.add('hidden'));
+  catTileModal?.querySelector('.modal-backdrop').addEventListener('click', () => catTileModal.classList.add('hidden'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') catTileModal?.classList.add('hidden');
+  });
 
   // 💼 Manage button opens config
   document.getElementById('portfolio-btn')?.addEventListener('click', () => openConfig('categories'));
@@ -185,8 +192,29 @@ function showCategoryDetail(categoryId) {
   const cat = getCategoryById(categoryId);
   if (!cat) return;
 
-  const trending = trendingByCategory.get(categoryId) || [];
   const allMappings = getMappingsForCategory(categoryId);
+
+  // Build flat list with trend data for every mapped market
+  const markets = allMappings.map(mapping => {
+    const market = allMarkets.find(m => m.ticker === mapping.ticker);
+    if (!market) return null;
+    const { trend, current, previous, hasPrevious } = computeTrend(market, mapping.direction);
+    return {
+      ...market,
+      direction: mapping.direction,
+      trend,
+      currentProb: current,
+      previousProb: previous,
+      trendPercent: hasPrevious ? Math.abs(current - previous) * 100 : 0,
+      _isActive: trend > 0.001,
+    };
+  }).filter(Boolean);
+
+  // Active (trending) first, then inactive; within each group sort by trend magnitude
+  markets.sort((a, b) => {
+    if (a._isActive !== b._isActive) return a._isActive ? -1 : 1;
+    return Math.abs(b.trend) - Math.abs(a.trend);
+  });
 
   gridEl.classList.add('hidden');
   detailEl.classList.remove('hidden');
@@ -200,35 +228,16 @@ function showCategoryDetail(categoryId) {
       </div>
     </div>
     <div class="market-list" id="market-list">
-      ${trending.length > 0 ? trending.map(m => renderMarketCard(m)).join('') : renderEmptyDetail(allMappings.length)}
+      ${markets.length > 0 ? markets.map(m => renderMarketCard(m)).join('') : renderEmptyDetail(allMappings.length)}
     </div>
-    ${renderInactiveSection(allMappings, trending)}
   `;
 
   document.getElementById('back-btn').addEventListener('click', () => renderCategoryGrid());
   attachMarketCardListeners(detailEl);
-  trending.forEach(m => loadSparkline(m.ticker, m.trend > 0));
-
-  const detailsEl = detailEl.querySelector('details');
-  if (detailsEl) {
-    detailsEl.addEventListener('toggle', () => {
-      if (detailsEl.open) {
-        allMappings
-          .filter(m => !trending.find(t => t.ticker === m.ticker))
-          .forEach(m => {
-            const market = allMarkets.find(mk => mk.ticker === m.ticker);
-            if (market) {
-              const { trend } = computeTrend(market, m.direction);
-              loadSparkline(m.ticker, trend > 0);
-            }
-          });
-      }
-    });
-  }
+  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
 }
 
 function attachMarketCardListeners(container) {
-  // 💼 button → add to category
   container.querySelectorAll('.add-to-cat-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -237,7 +246,13 @@ function attachMarketCardListeners(container) {
     });
   });
 
-  // Card body click → detail overlay
+  container.querySelectorAll('.market-cat-pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCategoryTileModal(pill.dataset.catId);
+    });
+  });
+
   container.querySelectorAll('.market-card').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.market-actions')) return;
@@ -248,35 +263,44 @@ function attachMarketCardListeners(container) {
 }
 
 function renderMarketCard(market) {
+  const isActive = market._isActive;
   const prob = formatProb(market.currentProb);
-  const probPct = Math.round(market.currentProb * 100);
-  const trendText = formatTrend(market.trend);
+  const probPct = Math.round((market.currentProb || 0) * 100);
   const isUp = market.trend > 0;
-  const trendClass = isUp ? 'trend-up' : 'trend-down';
+  const trendText = isActive ? formatTrend(market.trend) : '';
+  const trendClass = isActive ? (isUp ? 'trend-up' : 'trend-down') : '';
   const barColor = probPct > 60 ? 'var(--green)' : probPct > 40 ? 'var(--orange)' : 'var(--red)';
+  const activeColor = isActive ? barColor : 'var(--text-muted)';
+
+  const catPills = MARKET_MAPPINGS
+    .filter(m => m.ticker === market.ticker)
+    .map(m => getCategoryById(m.categoryId))
+    .filter(Boolean)
+    .map(c => `<button class="market-cat-pill" data-cat-id="${c.id}">${c.emoji} ${c.name}</button>`)
+    .join('');
 
   return `
-    <div class="market-card" data-ticker="${market.ticker}" style="cursor:pointer;">
+    <div class="market-card${isActive ? '' : ' market-card-inactive'}" data-ticker="${market.ticker}" style="cursor:pointer;">
       <div class="market-info">
         <div class="market-title">${market.title || market.ticker}</div>
-        <div class="market-subtitle">${market.ticker} · Vol: ${market.volume_24h_fp || '0'}</div>
+        <div class="market-subtitle">${market.ticker}${!isActive ? ' · <span class="stable-badge">stable</span>' : ''} · Vol: ${market.volume_24h_fp || '0'}</div>
       </div>
       <div class="market-chart">
         <canvas data-ticker="${market.ticker}" class="sparkline-canvas"></canvas>
       </div>
       <div class="market-prob">
-        <span class="prob-value" style="color:${barColor}">${prob}</span>
+        <span class="prob-value" style="color:${activeColor}">${prob}</span>
         <div class="prob-bar">
-          <div class="prob-bar-fill" style="width:${probPct}%;background:${barColor}"></div>
+          <div class="prob-bar-fill" style="width:${probPct}%;background:${activeColor}"></div>
         </div>
       </div>
       <div class="market-trend ${trendClass}">
-        <span class="trend-arrow">${isUp ? '▲' : '▼'}</span>
+        <span class="trend-arrow">${isActive ? (isUp ? '▲' : '▼') : ''}</span>
         <span class="trend-value">${trendText}</span>
       </div>
       <div class="market-actions">
         <button class="btn btn-sm add-to-cat-btn" data-ticker="${market.ticker}" title="Add to category">＋</button>
-        <span class="market-ticker-copy" title="${market.ticker}">${market.ticker}</span>
+        <div class="market-cat-pills-wrap">${catPills}</div>
       </div>
     </div>`;
 }
@@ -293,47 +317,58 @@ function renderEmptyDetail(totalMapped) {
     </div>`;
 }
 
-function renderInactiveSection(allMappings, trending) {
-  const trendingTickers = new Set(trending.map(m => m.ticker));
-  const inactiveMarkets = allMappings
-    .filter(m => !trendingTickers.has(m.ticker))
-    .map(mapping => {
-      const market = allMarkets.find(m => m.ticker === mapping.ticker);
-      return market ? { ...market, mapping } : null;
-    })
-    .filter(Boolean);
+// ===== Category Tile Modal =====
+function openCategoryTileModal(categoryId) {
+  const cat = getCategoryById(categoryId);
+  if (!cat) return;
 
-  if (inactiveMarkets.length === 0) return '';
+  const mappings = getMappingsForCategory(categoryId);
+  const markets = mappings.map(mapping => {
+    const market = allMarkets.find(m => m.ticker === mapping.ticker);
+    if (!market) return null;
+    const { trend, current } = computeTrend(market, mapping.direction);
+    return { ...market, direction: mapping.direction, trend, currentProb: current, _isActive: trend > 0.001 };
+  }).filter(Boolean).sort((a, b) => {
+    if (a._isActive !== b._isActive) return a._isActive ? -1 : 1;
+    return Math.abs(b.trend) - Math.abs(a.trend);
+  });
+
+  const modal = document.getElementById('cat-tile-modal');
+  document.getElementById('cat-tile-title').textContent = `${cat.emoji} ${cat.name}`;
+
+  const body = document.getElementById('cat-tile-body');
+  body.innerHTML = markets.length > 0
+    ? `<div class="cat-tile-grid">${markets.map(m => renderCatTile(m)).join('')}</div>`
+    : '<div class="empty-state"><p class="empty-state-text">No market data available for this category.</p></div>';
+
+  body.querySelectorAll('.cat-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      const market = markets.find(m => m.ticker === tile.dataset.ticker);
+      if (market) openDetail(market);
+    });
+  });
+
+  modal.classList.remove('hidden');
+  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+}
+
+function renderCatTile(market) {
+  const prob = formatProb(market.currentProb);
+  const probPct = Math.round((market.currentProb || 0) * 100);
+  const isActive = market._isActive;
+  const isUp = market.trend > 0;
+  const barColor = probPct > 60 ? 'var(--green)' : probPct > 40 ? 'var(--orange)' : 'var(--red)';
+  const trendText = isActive ? formatTrend(market.trend) : 'stable';
 
   return `
-    <details style="margin-top:1.5rem;">
-      <summary style="cursor:pointer;color:var(--text-muted);font-size:0.875rem;margin-bottom:0.75rem;">
-        ${inactiveMarkets.length} tracked market${inactiveMarkets.length !== 1 ? 's' : ''} not currently trending
-      </summary>
-      <div class="market-list">
-        ${inactiveMarkets.map(m => {
-          const { current } = computeTrend(m, m.mapping.direction);
-          const prob = formatProb(current);
-          return `
-            <div class="market-card" data-ticker="${m.ticker}" style="opacity:0.6;cursor:pointer;">
-              <div class="market-info">
-                <div class="market-title">${m.title || m.ticker}</div>
-                <div class="market-subtitle">${m.ticker}</div>
-              </div>
-              <div class="market-chart">
-                <canvas data-ticker="${m.ticker}" class="sparkline-canvas sparkline-inactive"></canvas>
-              </div>
-              <div class="market-prob">
-                <span class="prob-value" style="font-size:1.125rem;color:var(--text-muted)">${prob}</span>
-              </div>
-              <div class="market-trend" style="color:var(--text-muted)"><span>—</span></div>
-              <div class="market-actions">
-                <span class="market-ticker-copy" title="${m.ticker}">${m.ticker}</span>
-              </div>
-            </div>`;
-        }).join('')}
+    <div class="cat-tile${isActive ? '' : ' cat-tile-inactive'}" data-ticker="${market.ticker}">
+      <div class="cat-tile-title">${market.title || market.ticker}</div>
+      <div class="cat-tile-prob" style="color:${isActive ? barColor : 'var(--text-muted)'}">${prob}</div>
+      <canvas data-ticker="${market.ticker}" class="sparkline-canvas" style="width:100%;height:36px;display:block;margin:0.375rem 0;"></canvas>
+      <div class="cat-tile-trend${isActive ? (' ' + (isUp ? 'trend-up' : 'trend-down')) : ''}" style="${!isActive ? 'color:var(--text-muted);' : ''}">
+        ${isActive ? (isUp ? '▲' : '▼') + ' ' : ''}${trendText}
       </div>
-    </details>`;
+    </div>`;
 }
 
 // ===== Error Display =====

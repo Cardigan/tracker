@@ -651,6 +651,121 @@ a:hover { text-decoration: underline; }
   font-size: 0.6875rem;
   color: var(--text-secondary);
   white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.detail-cat-pill:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--text-primary);
+}
+
+/* ===== Market Card Category Pills ===== */
+.market-cat-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.market-cat-pill {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+
+.market-cat-pill:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--text-primary);
+}
+
+/* ===== Inactive / Stable Market Cards ===== */
+.market-card-inactive {
+  opacity: 0.6;
+}
+
+.stable-badge {
+  display: inline-block;
+  background: rgba(100, 116, 139, 0.2);
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.0625rem 0.3rem;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+/* ===== Category Tile Modal ===== */
+#cat-tile-modal { z-index: 500; }
+
+.modal-cat-tile {
+  max-width: 860px;
+  width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-cat-tile .modal-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cat-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.cat-tile {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.875rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.cat-tile:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+}
+
+.cat-tile-inactive {
+  opacity: 0.55;
+}
+
+.cat-tile-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cat-tile-prob {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.cat-tile-trend {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 /* ===== Market Detail Modal ===== */

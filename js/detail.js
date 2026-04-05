@@ -6,6 +6,7 @@ import { showAddToCategoryModal } from './search.js';
 let currentMarket = null;
 let allTrades = [];
 let selectedRange = 'all';
+let onCategoryClick = null;
 
 const RANGES = {
   '1h':  60 * 60 * 1000,
@@ -17,7 +18,8 @@ const RANGES = {
   'all': null,
 };
 
-export function initDetail() {
+export function initDetail(onCatClick) {
+  onCategoryClick = onCatClick || null;
   const modal = document.getElementById('detail-modal');
   if (!modal) return;
 
@@ -63,8 +65,13 @@ export async function openDetail(market) {
     if (catIds.length > 0) {
       pillsEl.innerHTML = catIds.map(id => {
         const cat = getCategoryById(id);
-        return cat ? `<span class="detail-cat-pill">${cat.emoji} ${cat.name}</span>` : '';
+        return cat ? `<button class="detail-cat-pill" data-cat-id="${cat.id}">${cat.emoji} ${cat.name}</button>` : '';
       }).join('');
+      pillsEl.querySelectorAll('.detail-cat-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          if (onCategoryClick) onCategoryClick(pill.dataset.catId);
+        });
+      });
       pillsEl.style.display = 'flex';
     } else {
       pillsEl.innerHTML = '';
