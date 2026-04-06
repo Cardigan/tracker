@@ -748,56 +748,6 @@ a:hover { text-decoration: underline; }
   padding: 0.75rem 1.25rem 1.25rem;
 }
 
-.cat-tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 1rem;
-}
-
-.cat-tile {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1rem 1.125rem 0.875rem;
-}
-
-.cat-tile-inactive { opacity: 0.6; }
-
-.cat-tile-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.cat-tile-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cat-tile-prob {
-  font-size: 1.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.cat-tile-trend { white-space: nowrap; }
-
-.cat-tile-chart-area {
-  width: 100%;
-  height: 200px;
-  margin-top: 0.25rem;
-}
-
-.cat-tile-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
 
 /* ===== Market Detail Modal ===== */
 .modal-detail {
