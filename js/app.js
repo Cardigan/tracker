@@ -3,7 +3,7 @@ import { getMarkets, getMarketTrades, isUsingMockData, fetchDefaults } from './a
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById, initDefaults, resetToDefaults } from './categories.js';
 import { getTrendingByCategory, formatProb, formatTrend, computeTrend } from './trend.js';
 import { initSearch, showAddToCategoryModal } from './search.js';
-import { initDetail, openDetail } from './detail.js';
+import { initDetail, openDetail, drawChart } from './detail.js';
 import { initConfig, openConfig } from './config.js';
 
 // ===== State =====
@@ -325,23 +325,125 @@ function renderEmptyDetail(totalMapped) {
 }
 
 // ===== Category Tile Modal =====
+const catTileTradesCache = new Map();
+const catTileRanges = new Map();
+
+const TILE_RANGES_MS = {
+  '1h':  60 * 60 * 1000,
+  '1w':  7  * 24 * 60 * 60 * 1000,
+  '1m':  30 * 24 * 60 * 60 * 1000,
+  '6m':  180 * 24 * 60 * 60 * 1000,
+  '1y':  365 * 24 * 60 * 60 * 1000,
+  '5y':  5 * 365 * 24 * 60 * 60 * 1000,
+  'all': null,
+};
+
+function renderDetailTile(market) {
+  const prob = Math.round((market.currentProb || 0) * 100);
+  const probColor = prob > 60 ? 'var(--green)' : prob > 40 ? 'var(--orange)' : 'var(--red)';
+  return `
+    <div class="detail-tile" data-ticker="${market.ticker}">
+      <div class="detail-tile-header">
+        <div class="detail-tile-title">${market.title || market.ticker}</div>
+        <div class="detail-tile-meta">
+          <span style="font-size:1.5rem;font-weight:700;color:${probColor};font-variant-numeric:tabular-nums;">${prob}%</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.75rem;">${market.ticker} · Vol: ${market.volume_24h_fp || '—'}</span>
+        </div>
+      </div>
+      <div class="range-selector">
+        <button class="range-btn" data-range="1h">1H</button>
+        <button class="range-btn" data-range="1w">1W</button>
+        <button class="range-btn" data-range="1m">1M</button>
+        <button class="range-btn" data-range="6m">6M</button>
+        <button class="range-btn" data-range="1y">1Y</button>
+        <button class="range-btn" data-range="5y">5Y</button>
+        <button class="range-btn active" data-range="all">ALL</button>
+      </div>
+      <div class="detail-tile-chart-area">
+        <canvas class="detail-tile-canvas" data-ticker="${market.ticker}"></canvas>
+      </div>
+    </div>`;
+}
+
+function showTileMessage(canvas, msg) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 300;
+  const h = canvas.clientHeight || 200;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+  ctx.font = '13px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(msg, w / 2, h / 2);
+}
+
+function renderDetailTileChart(ticker) {
+  const canvas = document.querySelector(`.detail-tile-canvas[data-ticker="${ticker}"]`);
+  if (!canvas) return;
+  const allTrades = catTileTradesCache.get(ticker) || [];
+  const rangeKey = catTileRanges.get(ticker) || 'all';
+  const rangeMs = TILE_RANGES_MS[rangeKey];
+  let trades = allTrades;
+  if (rangeMs !== null) trades = allTrades.filter(t => t.time >= Date.now() - rangeMs);
+  if (trades.length < 2) {
+    showTileMessage(canvas, allTrades.length === 0 ? 'No trade data' : 'No data in range');
+    return;
+  }
+  drawChart(canvas, trades);
+}
+
+async function loadDetailTile(market) {
+  const canvas = document.querySelector(`.detail-tile-canvas[data-ticker="${market.ticker}"]`);
+  if (!canvas) return;
+  showTileMessage(canvas, 'Loading...');
+  try {
+    const trades = await getMarketTrades(market.ticker, 500);
+    catTileTradesCache.set(market.ticker, trades);
+    renderDetailTileChart(market.ticker);
+  } catch {
+    showTileMessage(canvas, 'No chart data');
+  }
+}
+
 function openCategoryTileModal(categoryId) {
   const cat = getCategoryById(categoryId);
   if (!cat) return;
 
-  const markets = buildMarketsForList(getMappingsForCategory(categoryId));
+  catTileTradesCache.clear();
+  catTileRanges.clear();
 
+  const markets = buildMarketsForList(getMappingsForCategory(categoryId));
   const modal = document.getElementById('cat-tile-modal');
   document.getElementById('cat-tile-title').textContent = `${cat.emoji} ${cat.name}`;
 
   const body = document.getElementById('cat-tile-body');
   body.innerHTML = markets.length > 0
-    ? `<div class="market-list">${markets.map(m => renderMarketCard(m)).join('')}</div>`
+    ? `<div class="detail-tile-grid">${markets.map(m => renderDetailTile(m)).join('')}</div>`
     : '<div class="empty-state"><p class="empty-state-text">No market data available for this category.</p></div>';
 
-  attachMarketCardListeners(body);
+  body.querySelectorAll('.detail-tile').forEach(tile => {
+    const ticker = tile.dataset.ticker;
+    catTileRanges.set(ticker, 'all');
+    tile.querySelectorAll('.range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tile.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        catTileRanges.set(ticker, btn.dataset.range);
+        renderDetailTileChart(ticker);
+      });
+    });
+    tile.querySelector('.detail-tile-header')?.addEventListener('click', () => {
+      const market = allMarkets.find(m => m.ticker === ticker);
+      if (market) openDetail(market);
+    });
+  });
+
   modal.classList.remove('hidden');
-  markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
+  markets.forEach(m => loadDetailTile(m));
 }
 
 // ===== Error Display =====

@@ -139,7 +139,7 @@ function renderChart() {
   drawChart(canvas, trades);
 }
 
-function drawChart(canvas, trades) {
+export function drawChart(canvas, trades) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth || 600;
