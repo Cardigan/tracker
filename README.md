@@ -7,8 +7,53 @@ A dashboard tracking prediction market prices as signals for macro-scale narrati
 - Organises prediction markets into narrative categories (e.g. "AI Takeover", "End of the World")
 - Highlights markets that are **actively trending** toward their narrative
 - Sparkline charts show recent price movement at a glance
-- Click any market for a full historical price chart with time-range selectors
+- Click a **category card** to filter the market list and open the tile modal (a grid of full chart panels)
+- Click any **market row** for a full-screen historical price chart with time-range selectors (1H → ALL)
 - Fully configurable — add/remove categories and market mappings without touching code
+
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph Browser["Browser (ES Modules)"]
+        A[app.js\norchestration] --> B[api.js\nKalshi client + cache]
+        A --> C[categories.js\nstate: CATEGORIES, MARKET_MAPPINGS]
+        A --> D[trend.js\ntrend computation]
+        A --> E[search.js\nsearch modal]
+        A --> F[detail.js\ndetail overlay + drawChart]
+        A --> G[config.js\nManage modal]
+        F --> B
+        E --> B
+        G --> C
+    end
+
+    subgraph Data["Data Sources"]
+        B -->|direct fetch, dev| K[Kalshi REST API]
+        B -->|proxied, prod| P[Azure Functions proxy\napi/proxy/index.js]
+        P --> K
+        A -->|24h cache| DEF[defaults.json\ncategories + mappings]
+    end
+
+    subgraph UI["UI layers"]
+        A -->|renders| CG[Category Grid]
+        A -->|renders| ML[Market List]
+        A -->|opens| CTM[Category Tile Modal\ndetail-tile-grid]
+        F -->|opens| DM[Detail Modal\nfull chart]
+        CTM -->|tile header click| DM
+        ML -->|card click| DM
+        CG -->|card click| ML
+        CG -->|right-click pill| CTM
+    end
+```
+
+### Data flow
+
+1. On load, `app.js` fetches `defaults.json` (24 h cache) → calls `initDefaults` to populate mutable state in `categories.js`.
+2. `fetchAllMarkets` calls `api.js → getMarkets(tickers)` (15 min localStorage cache).  
+   On production, requests route through the Azure Functions CORS proxy.
+3. `trend.js → getTrendingByCategory` computes which markets are trending *toward* their narrative using recent trade deltas and the per-mapping `direction` flag.
+4. The category grid and market list are re-rendered synchronously. Sparkline charts are fetched in parallel in the background (50 trades each).
+5. Opening a detail overlay or category tile modal triggers a fresh 500-trade fetch for each visible market.
 
 ## Running locally
 
@@ -64,7 +109,7 @@ js/
   categories.js        — mutable CATEGORIES and MARKET_MAPPINGS state
   trend.js             — trend computation and filtering logic
   search.js            — search modal and add-to-category flow
-  detail.js            — market detail overlay with historical chart
+  detail.js            — market detail overlay + shared drawChart
   config.js            — Manage modal (categories + mappings UI)
 api/
   proxy/index.js       — Azure Functions CORS proxy

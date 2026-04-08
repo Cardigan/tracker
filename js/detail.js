@@ -1,13 +1,16 @@
 // Market detail overlay with historical chart
+// Renders a full-screen modal with a resizable price chart and time-range selector
+// for a single Kalshi market. Also exported: drawChart (shared with category tile modal).
 import { getMarketTrades } from './api.js';
 import { MARKET_MAPPINGS, getCategoryById } from './categories.js';
 import { showAddToCategoryModal } from './search.js';
 
-let currentMarket = null;
-let allTrades = [];
-let selectedRange = 'all';
-let onCategoryClick = null;
+let currentMarket = null;  // market object currently shown in the overlay
+let allTrades = [];        // full trade history for the current market
+let selectedRange = 'all'; // active range key — controls which slice of allTrades is drawn
+let onCategoryClick = null; // callback to open the category tile modal (injected by app.js)
 
+// Time-range window sizes in milliseconds (null = no filter → show all data).
 const RANGES = {
   '1h':  60 * 60 * 1000,
   '1w':  7  * 24 * 60 * 60 * 1000,
@@ -18,6 +21,8 @@ const RANGES = {
   'all': null,
 };
 
+// Wire up static modal elements (close buttons, range buttons, Escape key).
+// onCatClick is called when the user clicks a category pill inside the overlay.
 export function initDetail(onCatClick) {
   onCategoryClick = onCatClick || null;
   const modal = document.getElementById('detail-modal');
@@ -29,6 +34,7 @@ export function initDetail(onCatClick) {
     if (currentMarket) showAddToCategoryModal(currentMarket);
   });
 
+  // Escape closes the overlay only when it is the topmost visible modal.
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeDetail();
   });
@@ -43,6 +49,8 @@ export function initDetail(onCatClick) {
   });
 }
 
+// Opens the detail overlay for a market object (must have at least .ticker and .title).
+// Shows a loading state immediately, then fetches 500 trades asynchronously.
 export async function openDetail(market) {
   currentMarket = market;
   selectedRange = 'all';
@@ -58,7 +66,7 @@ export async function openDetail(market) {
   modal.querySelector('.detail-ticker-label').textContent = market.ticker;
   modal.querySelector('.detail-volume-label').textContent = market.volume_24h_fp || '—';
 
-  // Category pills
+  // Category pills — built from all MARKET_MAPPINGS entries that share this ticker.
   const pillsEl = modal.querySelector('#detail-category-pills');
   if (pillsEl) {
     const catIds = [...new Set(MARKET_MAPPINGS.filter(m => m.ticker === market.ticker).map(m => m.categoryId))];
@@ -79,11 +87,11 @@ export async function openDetail(market) {
     }
   }
 
-  // Reset range buttons
+  // Reset range buttons to 'ALL'.
   modal.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
   modal.querySelector('[data-range="all"]').classList.add('active');
 
-  // Show loading
+  // Show loading placeholder while the fetch is in-flight.
   showChartMessage('Loading chart data...');
 
   // Fetch trade history (500 trades for decent coverage)
@@ -95,12 +103,14 @@ export async function openDetail(market) {
   }
 }
 
+// Hides the overlay and clears state so memory is released.
 function closeDetail() {
   document.getElementById('detail-modal').classList.add('hidden');
   currentMarket = null;
   allTrades = [];
 }
 
+// Draws a centred text message on the chart canvas (loading / error states).
 function showChartMessage(msg) {
   const canvas = document.querySelector('.detail-chart-canvas');
   if (!canvas) return;
@@ -119,6 +129,7 @@ function showChartMessage(msg) {
   ctx.fillText(msg, w / 2, h / 2);
 }
 
+// Slices allTrades according to selectedRange, then delegates to drawChart.
 function renderChart() {
   const canvas = document.querySelector('.detail-chart-canvas');
   if (!canvas) return;
@@ -139,6 +150,22 @@ function renderChart() {
   drawChart(canvas, trades);
 }
 
+// ===== Shared chart renderer =====
+// Draws a full annotated price chart onto any <canvas> element.
+// Exported so the category tile modal (app.js) can reuse the same rendering logic.
+//
+// Layout:
+//   pad.left  — Y-axis labels (probability %)
+//   pad.right — breathing room
+//   pad.top   — breathing room
+//   pad.bottom — X-axis time labels
+//
+// Visual layers (bottom to top):
+//   1. Horizontal grid lines + Y labels
+//   2. Filled area under the price curve
+//   3. Price line stroke
+//   4. End dot (current price marker)
+//   5. X-axis time labels (start, mid, end)
 export function drawChart(canvas, trades) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -153,19 +180,21 @@ export function drawChart(canvas, trades) {
   const times = trades.map(t => t.time);
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
-  const range = maxP - minP || 0.01;
+  const range = maxP - minP || 0.01; // avoid division by zero on flat markets
   const pad = { top: 24, right: 16, bottom: 32, left: 48 };
   const cw = w - pad.left - pad.right;
   const ch = h - pad.top - pad.bottom;
 
+  // Map data index → canvas x; price value → canvas y.
   const xAt = i => pad.left + (i / (prices.length - 1)) * cw;
   const yAt = p => pad.top + ch - ((p - minP) / range) * ch;
 
+  // Net direction determines chart colour (green = up, red = down).
   const isUp = prices[prices.length - 1] >= prices[0];
   const lineColor = isUp ? '#22c55e' : '#ef4444';
   const fillColor = isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
 
-  // Grid lines + Y labels
+  // --- Layer 1: Grid lines + Y labels ---
   ctx.font = `11px -apple-system, sans-serif`;
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
@@ -181,7 +210,7 @@ export function drawChart(canvas, trades) {
     ctx.fillText(`${Math.round(p * 100)}%`, pad.left - 6, y + 4);
   }
 
-  // Filled area
+  // --- Layer 2: Filled area ---
   ctx.beginPath();
   ctx.moveTo(xAt(0), pad.top + ch);
   for (let i = 0; i < prices.length; i++) ctx.lineTo(xAt(i), yAt(prices[i]));
@@ -190,7 +219,7 @@ export function drawChart(canvas, trades) {
   ctx.fillStyle = fillColor;
   ctx.fill();
 
-  // Price line
+  // --- Layer 3: Price line ---
   ctx.beginPath();
   for (let i = 0; i < prices.length; i++) {
     if (i === 0) ctx.moveTo(xAt(0), yAt(prices[0]));
@@ -201,13 +230,13 @@ export function drawChart(canvas, trades) {
   ctx.lineJoin = 'round';
   ctx.stroke();
 
-  // End dot
+  // --- Layer 4: End dot ---
   ctx.beginPath();
   ctx.arc(xAt(prices.length - 1), yAt(prices[prices.length - 1]), 4, 0, Math.PI * 2);
   ctx.fillStyle = lineColor;
   ctx.fill();
 
-  // X axis time labels (start, mid, end)
+  // --- Layer 5: X-axis time labels (start, mid, end) ---
   ctx.fillStyle = 'rgba(148,163,184,0.65)';
   ctx.font = `11px -apple-system, sans-serif`;
   [[0, 'left'], [Math.floor(prices.length / 2), 'center'], [prices.length - 1, 'right']].forEach(([i, align]) => {
@@ -216,6 +245,10 @@ export function drawChart(canvas, trades) {
   });
 }
 
+// Formats a Date into a compact label appropriate for the distance from now:
+//   < 1 day  → time (HH:MM)
+//   < 1 year → month + day
+//   ≥ 1 year → month + 2-digit year
 function formatTimeLabel(date) {
   const diffMs = Date.now() - date;
   const diffDays = diffMs / 86400000;

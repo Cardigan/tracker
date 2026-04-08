@@ -1,4 +1,5 @@
 // Main application — orchestration and rendering
+// Coordinates data fetching, category grid, market list, and all modals.
 import { getMarkets, getMarketTrades, isUsingMockData, fetchDefaults } from './api.js';
 import { CATEGORIES, MARKET_MAPPINGS, getAllTickers, getMappingsForCategory, getCategoryById, initDefaults, resetToDefaults } from './categories.js';
 import { getTrendingByCategory, formatProb, formatTrend, computeTrend } from './trend.js';
@@ -7,23 +8,26 @@ import { initDetail, openDetail, drawChart } from './detail.js';
 import { initConfig, openConfig } from './config.js';
 
 // ===== State =====
-let allMarkets = [];
-let trendingByCategory = new Map();
-let currentFilterCategoryId = null;
+let allMarkets = [];               // flat list of all fetched Kalshi market objects
+let trendingByCategory = new Map(); // categoryId → array of trending market objects
+let currentFilterCategoryId = null; // which category is highlighted in the market list (null = all)
 let isLoading = true;
 
 // ===== DOM References =====
 const gridEl = document.getElementById('categories-grid');
 
 // ===== Init =====
+// Boot sequence: load defaults → wire up UI modules → render skeleton → fetch data → render.
 async function init() {
   const defaults = await fetchDefaults();
   initDefaults(defaults);
 
+  // Pass callbacks so child modules can trigger top-level re-renders.
   initSearch(handleMarketAdded, () => allMarkets);
   initDetail(openCategoryTileModal);
   initConfig(handleMarketAdded, handleConfigReset);
 
+  // Category tile modal: close on backdrop click, close button, or Escape.
   const catTileModal = document.getElementById('cat-tile-modal');
   catTileModal?.querySelector('.modal-close').addEventListener('click', () => catTileModal.classList.add('hidden'));
   catTileModal?.querySelector('.modal-backdrop').addEventListener('click', () => catTileModal.classList.add('hidden'));
@@ -43,6 +47,7 @@ async function init() {
   renderMarketList();
 }
 
+// After the user resets config to defaults, re-fetch and re-render everything.
 async function handleConfigReset() {
   resetToDefaults();
   await fetchAllMarkets();
@@ -51,6 +56,7 @@ async function handleConfigReset() {
 }
 
 // ===== Version Display =====
+// Reads version.json injected by CI (not present in local dev — silently ignored).
 async function loadVersion() {
   try {
     const resp = await fetch('/version.json');
@@ -62,6 +68,8 @@ async function loadVersion() {
 }
 
 // ===== Data Fetching =====
+// Fetches all tracked tickers from the Kalshi API, with graceful fallback to
+// the previous dataset if the request fails mid-session.
 async function fetchAllMarkets() {
   isLoading = true;
   const tickers = getAllTickers();
@@ -74,6 +82,7 @@ async function fetchAllMarkets() {
   } catch (err) {
     console.error('Failed to fetch markets:', err);
     if (previousMarkets.length > 0) {
+      // Keep showing stale data rather than blanking the UI.
       allMarkets = previousMarkets;
       trendingByCategory = getTrendingByCategory(allMarkets, MARKET_MAPPINGS, CATEGORIES);
       showError('Using cached data — unable to refresh from Kalshi API');
@@ -86,6 +95,8 @@ async function fetchAllMarkets() {
 }
 
 // ===== Sparkline Chart Drawing =====
+// Renders a small filled-area price chart into a <canvas> element.
+// Colours: green for net-positive price direction, red for net-negative.
 function drawSparkline(canvas, trades, isPositive) {
   if (!canvas || !trades || trades.length < 2) return;
 
@@ -100,11 +111,12 @@ function drawSparkline(canvas, trades, isPositive) {
   const prices = trades.map(t => t.price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  const range = max - min || 0.01;
+  const range = max - min || 0.01; // avoid division by zero on flat series
   const padding = 2;
   const color = isPositive ? '#22c55e' : '#ef4444';
   const fillColor = isPositive ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
 
+  // Draw filled area first (so the stroke line sits on top).
   ctx.beginPath();
   ctx.moveTo(padding, h - padding);
   for (let i = 0; i < prices.length; i++) {
@@ -117,6 +129,7 @@ function drawSparkline(canvas, trades, isPositive) {
   ctx.fillStyle = fillColor;
   ctx.fill();
 
+  // Draw the price line on top of the fill.
   ctx.beginPath();
   for (let i = 0; i < prices.length; i++) {
     const x = padding + (i / (prices.length - 1)) * (w - padding * 2);
@@ -129,6 +142,7 @@ function drawSparkline(canvas, trades, isPositive) {
   ctx.stroke();
 }
 
+// Fetches trade history for a single ticker and draws its sparkline.
 async function loadSparkline(ticker, isPositive) {
   const canvas = document.querySelector(`canvas[data-ticker="${ticker}"]`);
   if (!canvas) return;
@@ -139,10 +153,13 @@ async function loadSparkline(ticker, isPositive) {
 }
 
 // ===== Category Grid =====
+// Show placeholder skeleton cards while data loads.
 function renderLoadingGrid() {
   gridEl.innerHTML = Array(10).fill(0).map(() => '<div class="skeleton skeleton-card"></div>').join('');
 }
 
+// Renders the top-level category grid. Each card shows trending market count,
+// an animated pulse dot (active = green), and opens the tile modal on click.
 function renderCategoryGrid() {
   if (allMarkets.length === 0 && !isLoading) {
     gridEl.innerHTML = `
@@ -178,12 +195,15 @@ function renderCategoryGrid() {
       </div>`;
   }).join('');
 
+  // Clicking a card filters the market list below to that category.
   gridEl.querySelectorAll('.category-card').forEach(card => {
     card.addEventListener('click', () => renderMarketList(card.dataset.catId));
   });
 }
 
 // ===== Market List =====
+// Renders the flat list of markets below the grid.
+// Pass categoryId to filter; null shows all tracked markets.
 function renderMarketList(categoryId = null) {
   currentFilterCategoryId = categoryId;
 
@@ -218,6 +238,8 @@ function renderMarketList(categoryId = null) {
   markets.forEach(m => loadSparkline(m.ticker, m.trend > 0));
 }
 
+// Joins mapping metadata (direction, category) with live market data and computes trends.
+// Deduplicates by ticker, sorts trending markets first, then by trend magnitude.
 function buildMarketsForList(mappings) {
   const seen = new Set();
   const markets = [];
@@ -244,6 +266,8 @@ function buildMarketsForList(mappings) {
   return markets;
 }
 
+// Wire up the interactive elements inside the market list container:
+// add-to-category button, category pills (opens tile modal), and card click (opens detail).
 function attachMarketCardListeners(container) {
   container.querySelectorAll('.add-to-cat-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -269,6 +293,8 @@ function attachMarketCardListeners(container) {
   });
 }
 
+// Returns the HTML string for a single market row card.
+// Shared between the main market list and the category tile modal list.
 function renderMarketCard(market) {
   const isActive = market._isActive;
   const prob = formatProb(market.currentProb);
@@ -276,9 +302,11 @@ function renderMarketCard(market) {
   const isUp = market.trend > 0;
   const trendText = isActive ? formatTrend(market.trend) : '';
   const trendClass = isActive ? (isUp ? 'trend-up' : 'trend-down') : '';
+  // Colour the probability by conviction level: green >60%, orange 40–60%, red <40%.
   const barColor = probPct > 60 ? 'var(--green)' : probPct > 40 ? 'var(--orange)' : 'var(--red)';
   const activeColor = isActive ? barColor : 'var(--text-muted)';
 
+  // Build category pills from all mappings that share this ticker.
   const catPills = MARKET_MAPPINGS
     .filter(m => m.ticker === market.ticker)
     .map(m => getCategoryById(m.categoryId))
@@ -312,6 +340,7 @@ function renderMarketCard(market) {
     </div>`;
 }
 
+// Renders an empty-state message when a category has no live market data.
 function renderEmptyDetail(totalMapped) {
   return `
     <div class="empty-state">
@@ -325,9 +354,12 @@ function renderEmptyDetail(totalMapped) {
 }
 
 // ===== Category Tile Modal =====
-const catTileTradesCache = new Map();
-const catTileRanges = new Map();
+// Shows a grid of full chart panels (one per market) for a single category.
+// Trade data is fetched lazily per tile and cached here for the session.
+const catTileTradesCache = new Map(); // ticker → trades[]
+const catTileRanges = new Map();      // ticker → active range key ('1h', '1w', … 'all')
 
+// Time-range window sizes in milliseconds (null = no filter → show all data).
 const TILE_RANGES_MS = {
   '1h':  60 * 60 * 1000,
   '1w':  7  * 24 * 60 * 60 * 1000,
@@ -338,6 +370,7 @@ const TILE_RANGES_MS = {
   'all': null,
 };
 
+// Returns the HTML for a single chart tile within the category tile modal.
 function renderDetailTile(market) {
   const prob = Math.round((market.currentProb || 0) * 100);
   const probColor = prob > 60 ? 'var(--green)' : prob > 40 ? 'var(--orange)' : 'var(--red)';
@@ -365,6 +398,7 @@ function renderDetailTile(market) {
     </div>`;
 }
 
+// Draws a centred text message onto a canvas (used for loading / no-data states).
 function showTileMessage(canvas, msg) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -381,6 +415,7 @@ function showTileMessage(canvas, msg) {
   ctx.fillText(msg, w / 2, h / 2);
 }
 
+// Re-draws the chart for a single tile using the cached trades and current range selection.
 function renderDetailTileChart(ticker) {
   const canvas = document.querySelector(`.detail-tile-canvas[data-ticker="${ticker}"]`);
   if (!canvas) return;
@@ -396,6 +431,7 @@ function renderDetailTileChart(ticker) {
   drawChart(canvas, trades);
 }
 
+// Fetches trade history for one tile, caches it, and triggers a redraw.
 async function loadDetailTile(market) {
   const canvas = document.querySelector(`.detail-tile-canvas[data-ticker="${market.ticker}"]`);
   if (!canvas) return;
@@ -409,10 +445,14 @@ async function loadDetailTile(market) {
   }
 }
 
+// Opens the category tile modal for a given categoryId.
+// Clears previous cache, renders tile grid, wires range buttons, and kicks off
+// async chart loads in parallel for all markets in the category.
 function openCategoryTileModal(categoryId) {
   const cat = getCategoryById(categoryId);
   if (!cat) return;
 
+  // Clear caches from any previously opened category.
   catTileTradesCache.clear();
   catTileRanges.clear();
 
@@ -436,6 +476,7 @@ function openCategoryTileModal(categoryId) {
         renderDetailTileChart(ticker);
       });
     });
+    // Clicking the tile header opens the full-screen market detail overlay.
     tile.querySelector('.detail-tile-header')?.addEventListener('click', () => {
       const market = allMarkets.find(m => m.ticker === ticker);
       if (market) openDetail(market);
@@ -443,10 +484,12 @@ function openCategoryTileModal(categoryId) {
   });
 
   modal.classList.remove('hidden');
+  // Kick off chart loads in parallel — each resolves independently.
   markets.forEach(m => loadDetailTile(m));
 }
 
 // ===== Error Display =====
+// Replaces any existing error banner with a fresh one prepended to <main>.
 function showError(message) {
   const existing = document.querySelector('.error-banner');
   if (existing) existing.remove();
@@ -457,6 +500,7 @@ function showError(message) {
 }
 
 // ===== Callbacks =====
+// Called by search and config modules after a market or category is added/changed.
 async function handleMarketAdded() {
   await fetchAllMarkets();
   renderCategoryGrid();
